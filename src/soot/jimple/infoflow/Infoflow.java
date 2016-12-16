@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.Stack;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +53,9 @@ import soot.jimple.infoflow.entryPointCreators.IEntryPointCreator;
 import soot.jimple.infoflow.handlers.ResultsAvailableHandler;
 import soot.jimple.infoflow.handlers.ResultsAvailableHandler2;
 import soot.jimple.infoflow.handlers.TaintPropagationHandler;
+import soot.jimple.infoflow.nu.FlowPath;
+import soot.jimple.infoflow.nu.FlowPathSet;
+import soot.jimple.infoflow.nu.GraphTool;
 import soot.jimple.infoflow.problems.BackwardsInfoflowProblem;
 import soot.jimple.infoflow.problems.InfoflowProblem;
 import soot.jimple.infoflow.problems.TaintPropagationResults;
@@ -88,6 +92,9 @@ public class Infoflow extends AbstractInfoflow {
 
     private Set<Stmt> collectedSources = null;
     private Set<Stmt> collectedSinks = null;
+    
+    //XIANG
+    private FlowPathSet fps = null;
 
 	/**
 	 * Creates a new instance of the InfoFlow class for analyzing plain Java code without any references to APKs or the Android SDK.
@@ -126,7 +133,14 @@ public class Infoflow extends AbstractInfoflow {
 		this.pathBuilderFactory = pathBuilderFactory == null ? new DefaultPathBuilderFactory()
 				: pathBuilderFactory;
 	}
-
+	public void computeInfoflow(String appPath, String libPath,
+			IEntryPointCreator entryPointCreator,
+			ISourceSinkManager sourcesSinks,
+			FlowPathSet fps){
+		this.fps = fps;
+		computeInfoflow(appPath, libPath, entryPointCreator, sourcesSinks);
+	}
+	
 	@Override
 	public void computeInfoflow(String appPath, String libPath,
 			IEntryPointCreator entryPointCreator,
@@ -280,7 +294,12 @@ public class Infoflow extends AbstractInfoflow {
 		// Get the zero fact
 		Abstraction zeroValue = backProblem != null
 				? backProblem.createZeroValue() : null;
-		InfoflowProblem forwardProblem  = new InfoflowProblem(manager,
+		//XIANG
+		InfoflowProblem forwardProblem = null;
+		if(fps != null)
+			forwardProblem = new InfoflowProblem(manager, aliasingStrategy, zeroValue, fps);
+		else
+			forwardProblem  = new InfoflowProblem(manager,
 				aliasingStrategy, zeroValue);
 
 		// Set the options
@@ -339,10 +358,10 @@ public class Infoflow extends AbstractInfoflow {
 			logger.error("No sources found, aborting analysis");
 			return;
 		}
-		if (sinkCount == 0) {
-			logger.error("No sinks found, aborting analysis");
-			return;
-		}
+//		if (sinkCount == 0) {
+//			logger.error("No sinks found, aborting analysis");
+//			return;
+//		}
 		logger.info("Source lookup done, found {} sources and {} sinks.", forwardProblem.getInitialSeeds().size(),
 				sinkCount);
 
@@ -482,22 +501,33 @@ public class Infoflow extends AbstractInfoflow {
 		}
 		resultExecutor.shutdown();
 
+		//FlowClassifier classifier = new FlowClassifier();
 		if (results == null || results.getResults().isEmpty())
 			logger.warn("No results found.");
 		else for (ResultSinkInfo sink : results.getResults().keySet()) {
 			logger.info("The sink {} in method {} was called with values from the following sources:",
                     sink, iCfg.getMethodOf(sink.getSink()).getSignature() );
+			logger.info("SINK:"+sink.getSink().toString());
 			for (ResultSourceInfo source : results.getResults().get(sink)) {
-				logger.info("- {} in method {}",source, iCfg.getMethodOf(source.getSource()).getSignature());
-				if (source.getPath() != null) {
-					logger.info("\ton Path: ");
-					for (Unit p : source.getPath()) {
-						logger.info("\t -> " + iCfg.getMethodOf(p));
-						logger.info("\t\t -> " + p);
-					}
-				}
+				//XIANG
+				//GraphTool.buildFlowFullPath(iCfg, source.getPath());
+				//FlowPath fp = new FlowPath(iCfg, source.getPath());
+//				for(Stmt ss : source.getPath())
+//					System.out.println("Verification: "+fp.findStmtFromFlowPath(ss,	 iCfg)+"//"+ss);
+//				
+				//System.out.println("- {} in method {}",source, iCfg.getMethodOf(source.getSource()).getSignature());
+//				System.out.println("SOURCE:"+source.getSource().toString());
+//				if (source.getPath() != null) {
+//					System.out.println("\ton Path: ");
+//					for (Unit p : source.getPath()) {	
+//						System.out.print("\t -> " + p);
+//						System.out.println("\t\t -> " + iCfg.getMethodOf(p)+"\n");
+//					}
+//				}
+				//classifier.displayFlowInfo(source, sink);
 			}
 		}
+
 
 		for (ResultsAvailableHandler handler : onResultsAvailable)
 			handler.onResultsAvailable(iCfg, results);
@@ -508,7 +538,12 @@ public class Infoflow extends AbstractInfoflow {
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
 		System.out.println("Maximum memory consumption: " + maxMemoryConsumption / 1E6 + " MB");
 	}
-
+	
+	//XIANG
+	public IInfoflowCFG getICFG(){
+		return iCfg;
+	}
+	
 	/**
 	 * Gets the memory used by FlowDroid at the moment
 	 * @return FlowDroid's current memory consumption in bytes

@@ -40,5 +40,5 @@ public interface ISourceSinkManager {
 	 * if this method is not a sink
 	 */
 	boolean isSink(Stmt sCallSite, InterproceduralCFG<Unit, SootMethod> cfg, AccessPath ap);
-
+	
 }

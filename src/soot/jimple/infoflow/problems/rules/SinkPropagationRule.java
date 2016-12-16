@@ -39,6 +39,7 @@ public class SinkPropagationRule extends AbstractTaintPropagationRule {
 			Abstraction source, Stmt stmt, Stmt destStmt,
 			ByReferenceBoolean killSource,
 			ByReferenceBoolean killAll) {
+		//System.out.println("DEBUG propogateNormalFlow: "+source+" @"+stmt);
 		if (stmt instanceof ReturnStmt) {
 			final ReturnStmt returnStmt = (ReturnStmt) stmt;
 			checkForSink(d1, source, stmt, returnStmt.getOp());

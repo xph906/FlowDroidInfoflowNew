@@ -36,10 +36,12 @@ import soot.util.MultiMap;
 public class InfoflowResults {
 	
 	private final Logger logger = LoggerFactory.getLogger(getClass());
-		
+	
 	private final MultiMap<ResultSinkInfo, ResultSourceInfo> results =
 			new ConcurrentHashMultiMap<ResultSinkInfo, ResultSourceInfo>();
+	//private FlowPathSet fps;
 	
+	//private FlowPathSet fps;
 	public InfoflowResults() {
 		
 	}

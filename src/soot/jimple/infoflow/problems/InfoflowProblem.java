@@ -13,6 +13,7 @@ package soot.jimple.infoflow.problems;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import heros.FlowFunction;
@@ -29,9 +30,11 @@ import soot.SootMethod;
 import soot.Type;
 import soot.Unit;
 import soot.Value;
+import soot.ValueBox;
 import soot.jimple.ArrayRef;
 import soot.jimple.AssignStmt;
 import soot.jimple.CastExpr;
+import soot.jimple.Constant;
 import soot.jimple.DefinitionStmt;
 import soot.jimple.FieldRef;
 import soot.jimple.InstanceFieldRef;
@@ -50,6 +53,8 @@ import soot.jimple.infoflow.data.AccessPath;
 import soot.jimple.infoflow.data.AccessPath.ArrayTaintType;
 import soot.jimple.infoflow.data.AccessPathFactory;
 import soot.jimple.infoflow.handlers.TaintPropagationHandler.FlowFunctionType;
+import soot.jimple.infoflow.nu.FlowPath;
+import soot.jimple.infoflow.nu.FlowPathSet;
 import soot.jimple.infoflow.problems.rules.PropagationRuleManager;
 import soot.jimple.infoflow.solver.functions.SolverCallFlowFunction;
 import soot.jimple.infoflow.solver.functions.SolverCallToReturnFlowFunction;
@@ -67,6 +72,25 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 	
 	protected final TaintPropagationResults results;
 	
+	//XIANG
+	private FlowPathSet fps = null;
+	public InfoflowProblem(InfoflowManager manager,
+			IAliasingStrategy aliasingStrategy,
+			Abstraction zeroValue, FlowPathSet fps) {
+		super(manager);
+		
+		if (zeroValue != null)
+			setZeroValue(zeroValue);
+		
+		this.aliasingStrategy = aliasingStrategy;
+		this.aliasing = new Aliasing(aliasingStrategy, manager.getICFG());
+		this.results = new TaintPropagationResults(manager);
+		
+		this.propagationRules = new PropagationRuleManager(manager, aliasing,
+				createZeroValue(), results);
+		this.fps = fps;
+	}
+	
 	public InfoflowProblem(InfoflowManager manager,
 			IAliasingStrategy aliasingStrategy,
 			Abstraction zeroValue) {
@@ -81,6 +105,110 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 		
 		this.propagationRules = new PropagationRuleManager(manager, aliasing,
 				createZeroValue(), results);
+	}
+	
+	private void taintFlow(Unit src, Abstraction source, String msg){
+		if(fps != null && src instanceof Stmt && !source.getAccessPath().isEmpty()){
+			
+			Stmt stmt2 = (Stmt)src;
+//			if(stmt2.containsInvokeExpr()){
+//				InvokeExpr ie = stmt2.getInvokeExpr();
+//				boolean isSource = (manager.getSourceSinkManager() != null)
+//						? manager.getSourceSinkManager().getSourceInfo(stmt2, interproceduralCFG()) != null : false;	
+//				
+//				if(ie.getMethod().getName().equals("findViewById")){
+//					System.out.println("DEBUG3:"+src+"  //"+msg+" ||"+isSource);
+//					if(isSource == false){
+//						System.out.println("DEBUG3: 2"+src+"  //"+manager.getSourceSinkManager().getClass());
+//						//System.out.println(x);
+//					}
+//				}
+//				else if(ie.getMethod().getName().equals("setOnClickListener")){
+//					System.out.println("DEBUG3:"+src+"  //"+msg+" ||"+fps.findFlowPath((Stmt)src, interproceduralCFG()).size());
+//				}
+//			}
+			List<Integer> lfp = fps.findFlowPath((Stmt)src, interproceduralCFG());
+			boolean doTaint = false;
+			if(lfp.size() > 0 ){
+				Stmt stmt = (Stmt)src;
+				List<ValueBox> lvb = stmt.getUseBoxes();
+				for(ValueBox vb : lvb){
+					Value v = vb.getValue();
+					if(source.getAccessPath().isLocal()){
+						if(v instanceof Local && v.equals(source.getAccessPath().getPlainValue())){
+							//System.out.println("Local equal: "+v);
+							doTaint = true;
+						}
+					}
+					else if(source.getAccessPath().isStaticFieldRef()){
+						if(v instanceof StaticFieldRef){
+							if(((StaticFieldRef)v).getField().equals(source.getAccessPath().getLastField())){
+								//System.out.println("StaticFieldRef equal: "+v);
+								doTaint = true;
+							}
+						}
+					}
+					else if(source.getAccessPath().isInstanceFieldRef()){
+						if(v instanceof InstanceFieldRef){
+							InstanceFieldRef ifr = (InstanceFieldRef)v;
+							if(ifr.getBase().equals(source.getAccessPath().getPlainValue())){
+								if(ifr.getField().equals(source.getAccessPath().getLastField())){
+									//System.out.println("InstanceFieldRef equal: "+v);
+									doTaint = true;
+								}
+							}
+						}
+					}
+					else{
+						System.out.println("Unknown type accesspath: ");
+					}
+				}
+			}
+			if(doTaint){
+				System.out.println("ALERT: "+msg+"dotaint: "+src+" // "+source);
+				Integer intVal = getViewIdFromStmt(source.getCurrentStmt());
+				if(intVal != null){
+					for(int flowId : lfp)
+						fps.addViewFlowMapping(flowId, intVal);
+				}
+				Abstraction p = source.getPredecessor();
+				while(p != null){
+					intVal = getViewIdFromStmt(p.getCurrentStmt());
+					if(intVal != null){
+						for(int flowId : lfp)
+							fps.addViewFlowMapping(flowId, intVal);
+					}
+					System.out.println("  P:"+p.getAccessPath()+" || ");
+					System.out.println("     ST:"+p.getCurrentStmt());
+					p = p.getPredecessor();
+				}
+				System.out.println("Done");
+			}
+		}	
+	}
+	
+	private Integer getViewIdFromStmt(Stmt stmt){
+		if(stmt==null || !stmt.containsInvokeExpr())
+			return null;
+		InvokeExpr ie = stmt.getInvokeExpr();
+		SootMethod sm = ie.getMethod();
+		//TODO: add setContentView
+		if(sm.getName().equals("findViewById")){
+			//TODO: handle if findViewById is not a constant
+			//System.out.println("DEBUG2:"+ie.getArg(0));
+			Value v = ie.getArg(0);
+			if(v instanceof Constant){
+				try{
+					Constant c = (Constant)v;
+					Integer intVal = Integer.valueOf(c.toString());
+					return intVal;
+				}
+				catch(Exception e){
+					System.err.println("getViewIdFromStmt: " + e);
+				}
+			}
+		}
+		return null;
 	}
 	
 	@Override
@@ -140,7 +268,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					Type targetType) {
 				final Value leftValue = assignStmt.getLeftOp();
 				final Value rightValue = assignStmt.getRightOp();
-				
+//				System.out.println("AddTaintViaStmt: "+assignStmt);
+//				System.out.println("               Taint:  "+source.getAccessPath()+" / "+taintSet.size());
+//				for(Abstraction abs : taintSet)
+//					System.out.println("            TaintSet:"+abs.getAccessPath());
 				// Do not taint static fields unless the option is enabled
 				if (!manager.getConfig().getEnableStaticFieldTracking()
 						&& leftValue instanceof StaticFieldRef)
@@ -190,6 +321,9 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						aliasing.computeAliases(d1, assignStmt, leftValue, taintSet,
 								method, newAbs);
 				}
+//				System.out.println("          Done Taint: "+source.getAccessPath()+" / "+taintSet.size());
+//				for(Abstraction abs : taintSet)
+//					System.out.println("            TaintSet:"+abs.getAccessPath());
 			}
 			
 			/**
@@ -351,10 +485,12 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				if (!(src instanceof Stmt))
 					return KillAll.v();
 				
+				
 				return new NotifyingNormalFlowFunction((Stmt) src) {
 					
 					@Override
 					public Set<Abstraction> computeTargetsInternal(Abstraction d1, Abstraction source) {
+						taintFlow(src, source, "NormalFlow");
 						// Check whether we must activate a taint
 						final Abstraction newSource;
 						if (!source.isAbstractionActive() && src == source.getActivationUnit())
@@ -398,6 +534,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 			@Override
 			public FlowFunction<Abstraction> getCallFlowFunction(final Unit src, final SootMethod dest) {
+				
                 if (!dest.isConcrete()){
                     logger.debug("Call skipped because target has no body: {} -> {}", src, dest);
                     return KillAll.v();
@@ -418,6 +555,12 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 					@Override
 					public Set<Abstraction> computeTargets(Abstraction d1, Abstraction source) {
+//						System.out.println("getCallFlowFunction:"+src);
+//						System.out.println("      Taint:"+source.getAccessPath());
+//						System.out.println("      Taint@:"+source.getCurrentStmt());
+						
+						taintFlow(src, source, "CallFlow");
+						
 						Set<Abstraction> res = computeTargetsInternal(d1, source);
 						if (!res.isEmpty())
 							for (Abstraction abs : res)
@@ -427,6 +570,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					}
 					
 					private Set<Abstraction> computeTargetsInternal(Abstraction d1, Abstraction source) {
+						//System.out.println("DEBUGDEBUG: "+d1+" S:"+source);
 						if (manager.getConfig().getStopAfterFirstFlow() && !results.isEmpty())
 							return Collections.emptySet();
 						if (source == getZeroValue())
@@ -491,10 +635,15 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 			@Override
 			public FlowFunction<Abstraction> getReturnFlowFunction(final Unit callSite,
 					final SootMethod callee, final Unit exitStmt, final Unit retSite) {
+				
+//				System.out.println("  Taint   :"+source.getAccessPath()+" / "+source.getCurrentStmt());
+//				System.out.println("  Tainted@:"+source.getCurrentStmt());
+				
 				// Get the call site
 				if (callSite != null && !(callSite instanceof Stmt))
 					return KillAll.v();
 				final Stmt iCallStmt = (Stmt) callSite;
+//				System.out.println("RETURNFLOW: "+callSite);
 				
 				final ReturnStmt returnStmt = (exitStmt instanceof ReturnStmt) ? (ReturnStmt) exitStmt : null;
 				
@@ -510,6 +659,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					@Override
 					public Set<Abstraction> computeTargets(Abstraction source, Abstraction d1,
 							Collection<Abstraction> callerD1s) {
+//						System.out.println("getReturnFlowFunction:"+callSite);
+//						System.out.println("  retsite::"+retSite);
+//						System.out.println("    Taint:"+source.getAccessPath());
+						taintFlow(callSite, source, "ReturnFlow");
+						
 						Set<Abstraction> res = computeTargetsInternal(source, callerD1s);
 						return notifyOutFlowHandlers(exitStmt, d1, source, res,
 								FlowFunctionType.ReturnFlowFunction);
@@ -734,6 +888,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				if (!(call instanceof Stmt))
 					return KillAll.v();
 				
+//				System.out.println("getCallToReturnFlowFunction:"+call);
+//				System.out.println("  Taint   :"+source.getAccessPath()+" / "+source.getCurrentStmt());
+//				System.out.println("  Tainted@:"+source.getCurrentStmt());
+				
 				final Stmt iCallStmt = (Stmt) call;
 				final InvokeExpr invExpr = iCallStmt.getInvokeExpr();
 				
@@ -754,6 +912,14 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					@Override
 					public Set<Abstraction> computeTargets(Abstraction d1, Abstraction source) {
 						Set<Abstraction> res = computeTargetsInternal(d1, source);
+//						System.out.println("getCallToReturnFlowFunction cal:"+call);
+//						System.out.println("getCallToReturnFlowFunction ret:"+returnSite);
+//						System.out.println("    Taint:"+source.getAccessPath());
+						taintFlow(call, source, "CallToReturn");
+						
+//						System.out.println("Call2Ret: "+iCallStmt.getInvokeExpr()+"||"+d1);
+//						for(Abstraction abs : res)
+//							System.out.println("  "+abs);
 						return notifyOutFlowHandlers(call, d1, source, res,
 								FlowFunctionType.CallToReturnFlowFunction);
 					}

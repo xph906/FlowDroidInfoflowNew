@@ -50,6 +50,7 @@ public class Abstraction implements Cloneable, FastSolverLinkedNode<Abstraction,
 	
 	private Abstraction predecessor = null;
 	private Set<Abstraction> neighbors = null;
+	// currentStmt should be the stmt that creates this taint
 	private Stmt currentStmt = null;
 	private Stmt correspondingCallSite = null;
 	
@@ -102,6 +103,8 @@ public class Abstraction implements Cloneable, FastSolverLinkedNode<Abstraction,
 		this.neighbors = null;
 		this.isImplicit = isImplicit;
 		this.currentStmt = sourceContext == null ? null : sourceContext.getStmt();
+//		System.out.println("ABSTRACTION: "+apToTaint+" ");
+//		System.out.println("ABS    STMT: "+currentStmt);
 	}
 
 	/**
