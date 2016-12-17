@@ -12,6 +12,7 @@ import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
+import soot.jimple.Constant;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
 import soot.jimple.infoflow.results.ResultSinkInfo;
@@ -24,6 +25,8 @@ import soot.toolkits.graph.UnitGraph;
 import soot.util.queue.QueueReader;
 
 public class FlowPathSet {
+	final String SET_CONTENT_VIEW = "setContentView";
+	
 	private List<FlowPath> lst;
 	/* Key: the FlowPath's id
 	 * Value: a list of View Id associated with this flow. */
@@ -32,6 +35,8 @@ public class FlowPathSet {
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> eventRegistryMethodSet = null;
+	//activity class name -> set of Layout IDs
+	private Map<String, Set<Integer>> activityLayoutMap; 
 	
 	public Map<String, List<Stmt>> getRegistryMap() {
 		return registryMap;
@@ -50,9 +55,26 @@ public class FlowPathSet {
 	}
 
 	public FlowPathSet(){
-		lst = new ArrayList<FlowPath>();
+		this.lst = new ArrayList<FlowPath>();
+		
+
+		this.lifeCycleEventListenerSet = new HashSet<String>();
+		this.eventListenerMap = new HashMap<String, String>();
+		/* Key:
+		 *   1. For eventRegistry (e.g., setOnClickListener), the key is the 
+		 *      listener's type;
+		 *   2. For lifeCycleEventListener (e.g., onCreate), the key is composed 
+		 *      of the method's name and declaring class (the method's signature).
+		 * Value:
+		 *   Value would be a list of statements calling this method.
+		 * */
+		this.registryMap = new HashMap<String, List<Stmt>>();
+		this.activityLayoutMap = new HashMap<String, Set<Integer>>();
+		
 		buildEventListenerMap();
-		buildEventRegisteryMap();
+		this.eventRegistryMethodSet = new HashSet<String>(this.eventListenerMap.values());
+		
+		buildEventRegisteryMapAndActivityLayoutMap();
 		viewFlowMap = new HashMap<Integer, Set<Integer>>();
 	}
 
@@ -65,6 +87,11 @@ public class FlowPathSet {
 		fp.setId(lst.size());
 		lst.add(fp);
 	}
+	
+	/* return the flow's source's layout*/
+//	public Set<Integer> getFlowLayout(){
+//		
+//	}
 	
 	public List<Integer> findFlowPath(Stmt s, IInfoflowCFG icfg){
 		 List<Integer> rs = new ArrayList<Integer>();
@@ -86,7 +113,7 @@ public class FlowPathSet {
 	
 	//TODO: might be not complete.
 	private void buildEventListenerMap(){
-		this.eventListenerMap = new HashMap<String, String>();
+		
 		this.eventListenerMap.put("onClick", "setOnClickListener");
 		this.eventListenerMap.put("onLongClick", "setOnLongClickListener");
 		
@@ -100,9 +127,7 @@ public class FlowPathSet {
 		this.eventListenerMap.put("onTouchEvent", "setOnTouchListener");
 		this.eventListenerMap.put("onTouch", "setOnTouchListener");
 		
-		this.eventRegistryMethodSet = new HashSet<String>(this.eventListenerMap.values());
 		
-		this.lifeCycleEventListenerSet = new HashSet<String>();
 		this.lifeCycleEventListenerSet.add("onCreate");
 		this.lifeCycleEventListenerSet.add("onPause");
 		this.lifeCycleEventListenerSet.add("onStart");
@@ -110,18 +135,10 @@ public class FlowPathSet {
 		this.lifeCycleEventListenerSet.add("onRestart");
 		this.lifeCycleEventListenerSet.add("onStop");
 		this.lifeCycleEventListenerSet.add("onDestroy");
-		/* Key:
-		 *   1. For eventRegistry (e.g., setOnClickListener), the key is the 
-		 *      listener's type;
-		 *   2. For lifeCycleEventListener (e.g., onCreate), the key is composed 
-		 *      of the method's name and declaring class (the method's signature).
-		 * Value:
-		 *   Value would be a list of statements calling this method.
-		 * */
-		this.registryMap = new HashMap<String, List<Stmt>>();
+		
 		
 	}
-	private void buildEventRegisteryMap(){
+	private void buildEventRegisteryMapAndActivityLayoutMap(){
 		for (QueueReader<MethodOrMethodContext> rdr =
 				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
 			SootMethod m = rdr.next().method();
@@ -158,11 +175,46 @@ public class FlowPathSet {
 	    					registryMap.put(sig, lst);
 	    				}
 		    		}
+		    		else if(invokedM.getName().equals(SET_CONTENT_VIEW)){
+		    			try{
+		    				Value v = s.getInvokeExpr().getArg(0);
+		    				//TODO: handle when arg is not CONSTANT
+		    				if(v instanceof Constant){
+		    					Integer id = Integer.valueOf(((Constant)v).toString());
+		    					String key = m.getDeclaringClass().getName();
+		    					if(activityLayoutMap.containsKey(key)){
+		    						activityLayoutMap.get(key).add(id);
+		    					}
+		    					else {
+		    						Set<Integer> set = new HashSet<Integer>();
+		    						set.add(id);
+		    						activityLayoutMap.put(key, set);
+		    					}
+		    				}
+		    				else{
+		    					System.out.println("NULIST: alert: setContentView's arg is not constant:"+s);
+		    				}
+		    			}
+		    			catch(Exception e){
+		    				System.err.println("NULIST: error: buildEventRegisteryMapAndActivityLayoutMap "+e.toString());
+		    			}
+		    		}
 		    	}
 		    }
 		}
+		
+		for(String cls : activityLayoutMap.keySet()){
+			Set<Integer> set = activityLayoutMap.get(cls);
+			for(Integer id : set){
+				System.out.println("LAYOUT:"+cls+" => "+id);
+			}
+		}
 	}
 	
+	public Map<String, Set<Integer>> getActivityLayoutMap() {
+		return activityLayoutMap;
+	}
+
 	public Map<Integer, Set<Integer>> getViewFlowMap() {
 		return viewFlowMap;
 	}

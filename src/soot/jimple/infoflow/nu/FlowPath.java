@@ -375,6 +375,12 @@ public class FlowPath {
 	}
 	
 	public String getTag(){
-		return source.getSource()+" => "+sink.getSink();
+		//TODO: could trigger exception because getInvokeExpr returns null.
+		try{
+			return source.getSource().getInvokeExpr().getMethod().getName()+" => "+sink.getSink().getInvokeExpr().getMethod().getName();
+		}
+		catch(Exception e){
+			return source.getSource()+" => "+sink.getSink();
+		}
 	}
 }
