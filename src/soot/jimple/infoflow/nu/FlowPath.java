@@ -49,6 +49,7 @@ public class FlowPath {
 	private Map<String, String> eventListenerMap = null;
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
+	private Set<String> declaringClassSet = null;
 	
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Map<String, String> eventListenerMap, Set<String> lifeCycleEventListenerSet,
@@ -62,7 +63,7 @@ public class FlowPath {
 		this.eventListenerMap = eventListenerMap;
 		this.lifeCycleEventListenerSet = lifeCycleEventListenerSet;
 		this.id = -1;
-		//buildEventListenerMap();
+		this.declaringClassSet = new HashSet<String>();
 		
 		pathRS = new ArrayList<List<Stmt>>();
 		buildFlowFullPath(source.getPath());
@@ -75,6 +76,7 @@ public class FlowPath {
 			}
 			pathRS.add(triggers);
 		}
+		
 		
 	}
 	
@@ -145,6 +147,7 @@ public class FlowPath {
 //					System.out.println("NULIST DEBUG:  registrymethod: "+s);
 					rsLifeCycle.add(s);
 				}
+				declaringClassSet.add(sm.getDeclaringClass().getName());
 			}
 			else{
 				Iterator<Edge> edges = cg.edgesInto(sm);
@@ -176,6 +179,10 @@ public class FlowPath {
 		return rs;
 	}
 	
+	public Set<String> getDeclaringClassSet() {
+		return declaringClassSet;
+	}
+
 	public Stmt findStmtFromFlowPath(Stmt s, IInfoflowCFG newIcfg){
 		return pathStmtMap.get(buildStmtSignature(s, newIcfg));
 	}
@@ -194,8 +201,8 @@ public class FlowPath {
 	private void buildFlowFullPath(Stmt[] path){
 		List<List<Stmt>> rs = pathRS;
 		
-		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
-			debug = true;
+//		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
+//			debug = true;
 		for(int i=0; i<path.length-1; i++){
 			Stmt cur = path[i];
 			Stmt next = path[i+1];
@@ -240,6 +247,8 @@ public class FlowPath {
 			}
 		}
 	}
+	
+	
 	
 	private void addMultipleGroupStmtsToList(List<List<Stmt>> lst, List<List<Stmt>> adds){
 		if(lst.size() == 0){

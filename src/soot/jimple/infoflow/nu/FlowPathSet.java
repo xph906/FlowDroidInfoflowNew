@@ -88,11 +88,6 @@ public class FlowPathSet {
 		lst.add(fp);
 	}
 	
-	/* return the flow's source's layout*/
-//	public Set<Integer> getFlowLayout(){
-//		
-//	}
-	
 	public List<Integer> findFlowPath(Stmt s, IInfoflowCFG icfg){
 		 List<Integer> rs = new ArrayList<Integer>();
 		 for(int i=0; i<lst.size(); i++){
@@ -134,10 +129,9 @@ public class FlowPathSet {
 		this.lifeCycleEventListenerSet.add("onResume");
 		this.lifeCycleEventListenerSet.add("onRestart");
 		this.lifeCycleEventListenerSet.add("onStop");
-		this.lifeCycleEventListenerSet.add("onDestroy");
-		
-		
+		this.lifeCycleEventListenerSet.add("onDestroy");	
 	}
+	
 	private void buildEventRegisteryMapAndActivityLayoutMap(){
 		for (QueueReader<MethodOrMethodContext> rdr =
 				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
@@ -180,6 +174,7 @@ public class FlowPathSet {
 		    				Value v = s.getInvokeExpr().getArg(0);
 		    				//TODO: handle when arg is not CONSTANT
 		    				if(v instanceof Constant){
+		    					System.out.println("DEBUG7: "+s);
 		    					Integer id = Integer.valueOf(((Constant)v).toString());
 		    					String key = m.getDeclaringClass().getName();
 		    					if(activityLayoutMap.containsKey(key)){

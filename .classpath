@@ -4,7 +4,6 @@
 	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins"/>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="src" path="test"/>
-	<classpathentry kind="src" path="securiBench"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/soot"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/heros"/>
 	<classpathentry kind="lib" path="lib/cos.jar"/>
@@ -12,5 +11,6 @@
 	<classpathentry kind="lib" path="lib/slf4j-api-1.7.5.jar"/>
 	<classpathentry kind="lib" path="lib/slf4j-simple-1.7.5.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/jasmin"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
