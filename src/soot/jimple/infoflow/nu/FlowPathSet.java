@@ -15,6 +15,7 @@ import soot.Value;
 import soot.jimple.Constant;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
+
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
@@ -157,6 +158,7 @@ public class FlowPathSet {
 		    					lst.add(s);
 		    					registryMap.put(type, lst);
 		    				}
+		    				System.out.println("DEBUG4:"+type+" -> "+s);
 		    			}
 		    		}
 		    		else if(lifeCycleEventListenerSet.contains(invokedM.getName())){
@@ -212,6 +214,21 @@ public class FlowPathSet {
 
 	public Map<Integer, Set<Integer>> getViewFlowMap() {
 		return viewFlowMap;
+	}
+	
+	//This method is called
+	public void updateXMLEventListener(Map<String, Set<Integer>> listenerCls2ViewID){
+		for(int i=0; i<lst.size(); i++){
+			FlowPath fp = lst.get(i);
+			Set<String> listeners = fp.getEventListenerClassSet();
+			for(String listener : listeners){
+				if(listenerCls2ViewID.containsKey(listener)){
+					Set<Integer> views = listenerCls2ViewID.get(listener);
+					for(Integer viewID : views)
+						addViewFlowMapping(i, viewID);
+				}
+			}
+		}
 	}
 	
 	public void addViewFlowMapping(int flowId, int viewId){

@@ -50,6 +50,7 @@ public class FlowPath {
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> declaringClassSet = null;
+	private Set<String> eventListenerClassSet = null;
 	
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Map<String, String> eventListenerMap, Set<String> lifeCycleEventListenerSet,
@@ -64,6 +65,7 @@ public class FlowPath {
 		this.lifeCycleEventListenerSet = lifeCycleEventListenerSet;
 		this.id = -1;
 		this.declaringClassSet = new HashSet<String>();
+		this.eventListenerClassSet = new HashSet<String>();
 		
 		pathRS = new ArrayList<List<Stmt>>();
 		buildFlowFullPath(source.getPath());
@@ -76,7 +78,6 @@ public class FlowPath {
 			}
 			pathRS.add(triggers);
 		}
-		
 		
 	}
 	
@@ -109,7 +110,7 @@ public class FlowPath {
 	
 	private List<Stmt> findFlowTrigger(){
 		
-		System.out.println("NULIST: Start finding trigger for flow: "+this.source.getSource());
+		System.out.println("NULIST: Start finding trigger for flow: "+this.source.getSource()+"=>"+sink.getSink());
 		//Stmt src = this.source.getSource();
 		if(this.icfg==null){
 			System.out.println("NULIST DEBUG: no parent method for source");
@@ -131,7 +132,8 @@ public class FlowPath {
 		while(!queue.isEmpty()){
 			SootMethod sm = queue.poll();
 			if(this.eventListenerMap.containsKey(sm.getName()) ){
-//				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().toString());
+				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
+				eventListenerClassSet.add(sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
 				if(lst == null) continue;
 				for(Stmt s : lst){
@@ -140,7 +142,7 @@ public class FlowPath {
 				}
 			}
 			else if(this.lifeCycleEventListenerSet.contains(sm.getName())){
-//				System.out.println("NULIST DEBUG: Found trigger2: "+sm.getSignature());
+				//System.out.println("NULIST DEBUG: Found trigger2: "+sm.getSignature());
 				List<Stmt> lst = this.registryMap.get(sm.getSignature());
 				if(lst == null) continue;
 				for(Stmt s : lst){
@@ -179,6 +181,10 @@ public class FlowPath {
 		return rs;
 	}
 	
+	public Set<String> getEventListenerClassSet() {
+		return eventListenerClassSet;
+	}
+
 	public Set<String> getDeclaringClassSet() {
 		return declaringClassSet;
 	}
