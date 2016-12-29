@@ -165,7 +165,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				}
 			}
 			if(doTaint){
-				System.out.println("ALERT: "+msg+"dotaint: "+src+" // "+source);
+//				System.out.println("ALERT: "+msg+"dotaint: "+src+" // "+source);
 				Integer intVal = getViewIdFromStmt(source.getCurrentStmt());
 				if(intVal != null){
 					for(int flowId : lfp)
@@ -178,11 +178,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						for(int flowId : lfp)
 							fps.addViewFlowMapping(flowId, intVal);
 					}
-					System.out.println("  P:"+p.getAccessPath()+" || ");
-					System.out.println("     ST:"+p.getCurrentStmt());
+//					System.out.println("  P:"+p.getAccessPath()+" || ");
+//					System.out.println("     ST:"+p.getCurrentStmt());
 					p = p.getPredecessor();
 				}
-				System.out.println("Done");
+//				System.out.println("Done");
 			}
 		}	
 	}

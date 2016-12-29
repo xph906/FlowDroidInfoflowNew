@@ -217,13 +217,13 @@ public class FlowPathSet {
 	}
 	
 	//This method is called
-	public void updateXMLEventListener(Map<String, Set<Integer>> listenerCls2ViewID){
+	public void updateXMLEventListener(Map<String, Set<Integer>> xmlEventHandler2ViewIds){
 		for(int i=0; i<lst.size(); i++){
 			FlowPath fp = lst.get(i);
-			Set<String> listeners = fp.getEventListenerClassSet();
-			for(String listener : listeners){
-				if(listenerCls2ViewID.containsKey(listener)){
-					Set<Integer> views = listenerCls2ViewID.get(listener);
+			Set<String> methods = fp.getAllTrigerMethodSet();
+			for(String method : methods){
+				if(xmlEventHandler2ViewIds.containsKey(method)){
+					Set<Integer> views = xmlEventHandler2ViewIds.get(method);
 					for(Integer viewID : views)
 						addViewFlowMapping(i, viewID);
 				}

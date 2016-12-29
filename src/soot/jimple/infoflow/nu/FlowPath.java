@@ -50,7 +50,7 @@ public class FlowPath {
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> declaringClassSet = null;
-	private Set<String> eventListenerClassSet = null;
+	private Set<String> allTrigerMethodSet = null;
 	
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Map<String, String> eventListenerMap, Set<String> lifeCycleEventListenerSet,
@@ -65,7 +65,8 @@ public class FlowPath {
 		this.lifeCycleEventListenerSet = lifeCycleEventListenerSet;
 		this.id = -1;
 		this.declaringClassSet = new HashSet<String>();
-		this.eventListenerClassSet = new HashSet<String>();
+		//TODO: the name should be changed.
+		this.allTrigerMethodSet = new HashSet<String>();
 		
 		pathRS = new ArrayList<List<Stmt>>();
 		buildFlowFullPath(source.getPath());
@@ -131,9 +132,10 @@ public class FlowPath {
 		List<Stmt> rsLifeCycle = new ArrayList<Stmt>();
 		while(!queue.isEmpty()){
 			SootMethod sm = queue.poll();
+			//a regular method could be declared as event handler
+			allTrigerMethodSet.add(sm.getName());
 			if(this.eventListenerMap.containsKey(sm.getName()) ){
 				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
-				eventListenerClassSet.add(sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
 				if(lst == null) continue;
 				for(Stmt s : lst){
@@ -181,8 +183,8 @@ public class FlowPath {
 		return rs;
 	}
 	
-	public Set<String> getEventListenerClassSet() {
-		return eventListenerClassSet;
+	public Set<String> getAllTrigerMethodSet() {
+		return allTrigerMethodSet;
 	}
 
 	public Set<String> getDeclaringClassSet() {
@@ -206,7 +208,7 @@ public class FlowPath {
 	
 	private void buildFlowFullPath(Stmt[] path){
 		List<List<Stmt>> rs = pathRS;
-		
+		if(path == null) return ;
 //		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
 //			debug = true;
 		for(int i=0; i<path.length-1; i++){
@@ -253,8 +255,6 @@ public class FlowPath {
 			}
 		}
 	}
-	
-	
 	
 	private void addMultipleGroupStmtsToList(List<List<Stmt>> lst, List<List<Stmt>> adds){
 		if(lst.size() == 0){
