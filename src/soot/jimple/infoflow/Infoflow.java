@@ -71,6 +71,7 @@ import soot.jimple.infoflow.solver.fastSolver.InfoflowSolver;
 import soot.jimple.infoflow.source.ISourceSinkManager;
 import soot.jimple.infoflow.util.SootMethodRepresentationParser;
 import soot.jimple.infoflow.util.SystemClassHandler;
+import soot.jimple.toolkits.callgraph.CallGraph;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.options.Options;
 /**
@@ -204,6 +205,9 @@ public class Infoflow extends AbstractInfoflow {
 		runAnalysis(sourcesSinks, null);
 	}
 
+	private void findAllFindViewByIdMethods(){
+		
+	}
 	/**
 	 * Conducts a taint analysis on an already initialized callgraph
 	 * @param sourcesSinks The sources and sinks to be used
@@ -231,7 +235,9 @@ public class Infoflow extends AbstractInfoflow {
 		constructCallgraph();
 		logger.info("Callgraph construction took " + (System.nanoTime() - beforeCallgraph) / 1E9
 				+ " seconds");
-
+		
+		//XIANG
+		/*
         // Perform constant propagation and remove dead code
         if (config.getCodeEliminationMode() != CodeEliminationMode.NoCodeElimination) {
 			long currentMillis = System.nanoTime();
@@ -278,7 +284,6 @@ public class Infoflow extends AbstractInfoflow {
 				backSolver = new BackwardsInfoflowSolver(backProblem, executor);
 				backSolver.setMemoryManager(memoryManager);
 				backSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
-//				backSolver.setEnableMergePointChecking(true);
 
 				aliasingStrategy = new FlowSensitiveAliasStrategy(iCfg, backSolver);
 				break;
@@ -311,7 +316,6 @@ public class Infoflow extends AbstractInfoflow {
 
 		forwardSolver.setMemoryManager(memoryManager);
 		forwardSolver.setJumpPredecessors(!pathBuilderFactory.supportsPathReconstruction());
-//		forwardSolver.setEnableMergePointChecking(true);
 
 		forwardProblem.setTaintPropagationHandler(taintPropagationHandler);
 		forwardProblem.setTaintWrapper(taintWrapper);
@@ -358,10 +362,6 @@ public class Infoflow extends AbstractInfoflow {
 			logger.error("No sources found, aborting analysis");
 			return;
 		}
-//		if (sinkCount == 0) {
-//			logger.error("No sinks found, aborting analysis");
-//			return;
-//		}
 		logger.info("Source lookup done, found {} sources and {} sinks.", forwardProblem.getInitialSeeds().size(),
 				sinkCount);
 
@@ -509,22 +509,7 @@ public class Infoflow extends AbstractInfoflow {
                     sink, iCfg.getMethodOf(sink.getSink()).getSignature() );
 			logger.info("SINK:"+sink.getSink().toString());
 			for (ResultSourceInfo source : results.getResults().get(sink)) {
-				//XIANG
-				//GraphTool.buildFlowFullPath(iCfg, source.getPath());
-				//FlowPath fp = new FlowPath(iCfg, source.getPath());
-//				for(Stmt ss : source.getPath())
-//					System.out.println("Verification: "+fp.findStmtFromFlowPath(ss,	 iCfg)+"//"+ss);
-//				
-				//System.out.println("- {} in method {}",source, iCfg.getMethodOf(source.getSource()).getSignature());
-//				System.out.println("SOURCE:"+source.getSource().toString());
-//				if (source.getPath() != null) {
-//					System.out.println("\ton Path: ");
-//					for (Unit p : source.getPath()) {	
-//						System.out.print("\t -> " + p);
-//						System.out.println("\t\t -> " + iCfg.getMethodOf(p)+"\n");
-//					}
-//				}
-				//classifier.displayFlowInfo(source, sink);
+			
 			}
 		}
 
@@ -537,6 +522,8 @@ public class Infoflow extends AbstractInfoflow {
 
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
 		System.out.println("Maximum memory consumption: " + maxMemoryConsumption / 1E6 + " MB");
+		
+		*///XIANG
 	}
 	
 	//XIANG
