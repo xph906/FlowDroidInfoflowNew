@@ -28,8 +28,8 @@ import soot.toolkits.graph.UnitGraph;
 import soot.util.queue.QueueReader;
 
 public class GraphTool {
-	//static String outputFolder = "/home/xpan/Projects/AndroidDataflow/output/";
-	static String outputFolder = "/Users/xpan/Documents/projects/dataflow-project/output/";
+	static String outputFolder = "/home/xpan/Projects/AndroidDataflow/output/";
+	//static String outputFolder = "/Users/xpan/Documents/projects/dataflow-project/output/";
 	static public void displayGraph(UnitGraph g, SootMethod m){
 		displayGraph(g, m.getName(), g.getHeads(), false);
 	}
@@ -51,7 +51,7 @@ public class GraphTool {
 			if (startingUnits == null)
 				startingUnits = g.getHeads();
 			String fileName = outputFolder+graphName+".txt";
-			System.out.println("Display graph "+graphName+" to "+fileName);
+			//System.out.println("  Display graph "+graphName+" to "+fileName);
 			writer = new PrintWriter(fileName, "UTF-8");
 		    
 			Queue<Pair<Unit, Integer>> queue = new java.util.concurrent.LinkedBlockingQueue<Pair<Unit, Integer>>();
