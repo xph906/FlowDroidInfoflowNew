@@ -165,51 +165,111 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				}
 			}
 			if(doTaint){
-//				System.out.println("ALERT: "+msg+"dotaint: "+src+" // "+source);
-				Integer intVal = getViewIdFromStmt(source.getCurrentStmt());
+				System.out.println("ALERT: "+msg+"dotaint: "+src);
+				//for findViewById
+				Abstraction taintSource = source;
+				Integer intVal = null;
+				while(taintSource!=null){	
+					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
+					if(intVal !=null){
+						System.out.println("  SRC INT:"+taintSource.getCurrentStmt());
+						break;
+					}
+					taintSource = taintSource.getPredecessor();
+				}
 				if(intVal != null){
 					for(int flowId : lfp)
 						fps.addViewFlowMapping(flowId, intVal);
 				}
-				Abstraction p = source.getPredecessor();
-				while(p != null){
-					intVal = getViewIdFromStmt(p.getCurrentStmt());
-					if(intVal != null){
-						for(int flowId : lfp)
-							fps.addViewFlowMapping(flowId, intVal);
+				
+				//for Preference
+				//TODO: can be optimized here for performance.
+				taintSource = source;
+				String key = null;
+				while(taintSource != null){	
+					key = FlowPathSet.getPreferenceKey(taintSource.getCurrentStmt());
+					if(key !=null){
+						System.out.println("  SRC STRING:"+taintSource.getCurrentStmt()+" V:"+key);
+						break;
 					}
-//					System.out.println("  P:"+p.getAccessPath()+" || ");
-//					System.out.println("     ST:"+p.getCurrentStmt());
-					p = p.getPredecessor();
+					taintSource = taintSource.getPredecessor();
 				}
-//				System.out.println("Done");
+				if(key != null){
+					Set<Integer> ids = fps.getPreferenceKey2ViewIDMap().get(key);
+					if(ids != null){
+						for(int flowId : lfp){
+							for(int viewId : ids)
+								fps.addViewFlowMapping(flowId, viewId);
+						}
+					}
+				}
+//				Abstraction p = source.getPredecessor();
+//				while(p != null){
+//					intVal = FlowPathSet.getViewIdFromStmt(p.getCurrentStmt());
+//					if(intVal != null){
+//						for(int flowId : lfp)
+//							fps.addViewFlowMapping(flowId, intVal);
+//					}
+//					p = p.getPredecessor();
+//				}
 			}
 		}	
 	}
 	
-	private Integer getViewIdFromStmt(Stmt stmt){
-		if(stmt==null || !stmt.containsInvokeExpr())
-			return null;
-		InvokeExpr ie = stmt.getInvokeExpr();
-		SootMethod sm = ie.getMethod();
-		//TODO: add setContentView
-		if(sm.getName().equals("findViewById")){
-			//TODO: handle if findViewById is not a constant
-			//System.out.println("DEBUG2:"+ie.getArg(0));
-			Value v = ie.getArg(0);
-			if(v instanceof Constant){
-				try{
-					Constant c = (Constant)v;
-					Integer intVal = Integer.valueOf(c.toString());
-					return intVal;
-				}
-				catch(Exception e){
-					System.err.println("getViewIdFromStmt: " + e);
-				}
-			}
-		}
-		return null;
-	}
+//	private Integer getViewIdFromStmt(Stmt stmt){
+//		if(stmt==null || !stmt.containsInvokeExpr())
+//			return null;
+//		InvokeExpr ie = stmt.getInvokeExpr();
+//		SootMethod sm = ie.getMethod();
+//		//TODO: add setContentView
+//		if(sm.getName().equals("findViewById")){
+//			//TODO: handle if findViewById is not a constant
+//			//System.out.println("DEBUG2:"+ie.getArg(0));
+//			Value v = ie.getArg(0);
+//			if(v instanceof Constant){
+//				try{
+//					Constant c = (Constant)v;
+//					Integer intVal = Integer.valueOf(c.toString());
+//					return intVal;
+//				}
+//				catch(Exception e){
+//					System.err.println("getViewIdFromStmt: " + e);
+//				}
+//			}
+//		}
+//		return null;
+//	}
+//	
+//	private String getPreferenceKey(Stmt stmt){
+//		if(stmt==null || !stmt.containsInvokeExpr())
+//			return null;
+//		InvokeExpr ie = stmt.getInvokeExpr();
+//		SootMethod sm = ie.getMethod();
+//		if(!sm.getSignature().contains("SharedPreferences"))
+//			return null;
+//		if(sm.getName().equals("putBoolean") || 
+//			sm.getName().equals("putFloat") ||
+//			sm.getName().equals("putInt") ||
+//			sm.getName().equals("putLong") ||
+//			sm.getName().equals("putString") ||
+//			sm.getName().equals("getBoolean") || 
+//			sm.getName().equals("getFloat") ||
+//			sm.getName().equals("getInt") ||
+//			sm.getName().equals("getLong") ||
+//			sm.getName().equals("getString") ){
+//			Value v = ie.getArg(0);
+//			if(v instanceof Constant){
+//				try{
+//					Constant c = (Constant)v;
+//					return String.valueOf(c.toString());
+//				}
+//				catch(Exception e){
+//					System.err.println("getPreferenceKey: " + e+" //"+stmt);
+//				}
+//			}
+//		}
+//		return null;
+//	}
 	
 	@Override
 	public FlowFunctions<Unit, Abstraction, SootMethod> createFlowFunctionsFactory() {
@@ -554,11 +614,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				return new SolverCallFlowFunction() {
 
 					@Override
-					public Set<Abstraction> computeTargets(Abstraction d1, Abstraction source) {
-//						System.out.println("getCallFlowFunction:"+src);
-//						System.out.println("      Taint:"+source.getAccessPath());
-//						System.out.println("      Taint@:"+source.getCurrentStmt());
-						
+					public Set<Abstraction> computeTargets(Abstraction d1, Abstraction source) {						
 						taintFlow(src, source, "CallFlow");
 						
 						Set<Abstraction> res = computeTargetsInternal(d1, source);

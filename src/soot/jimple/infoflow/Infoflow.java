@@ -237,7 +237,7 @@ public class Infoflow extends AbstractInfoflow {
 				+ " seconds");
 		
 		//XIANG
-		/*
+		
         // Perform constant propagation and remove dead code
         if (config.getCodeEliminationMode() != CodeEliminationMode.NoCodeElimination) {
 			long currentMillis = System.nanoTime();
@@ -522,8 +522,7 @@ public class Infoflow extends AbstractInfoflow {
 
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
 		System.out.println("Maximum memory consumption: " + maxMemoryConsumption / 1E6 + " MB");
-		
-		*///XIANG
+
 	}
 	
 	//XIANG

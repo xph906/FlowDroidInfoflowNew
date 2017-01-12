@@ -28,6 +28,64 @@ import soot.util.queue.QueueReader;
 public class FlowPathSet {
 	final String SET_CONTENT_VIEW = "setContentView";
 	
+	//TODO: deal with non-constant case.
+	static public Integer getViewIdFromStmt(Stmt stmt){
+		if(stmt==null || !stmt.containsInvokeExpr())
+			return null;
+		InvokeExpr ie = stmt.getInvokeExpr();
+		SootMethod sm = ie.getMethod();
+		//TODO: add setContentView
+		if(sm.getName().equals("findViewById")){
+			//TODO: handle if findViewById is not a constant
+			//System.out.println("DEBUG2:"+ie.getArg(0));
+			Value v = ie.getArg(0);
+			if(v instanceof Constant){
+				try{
+					Constant c = (Constant)v;
+					Integer intVal = Integer.valueOf(c.toString());
+					return intVal;
+				}
+				catch(Exception e){
+					System.err.println("getViewIdFromStmt: " + e);
+				}
+			}
+		}
+		return null;
+	}
+	
+	//TODO: deal with non-constant case.
+	static public String getPreferenceKey(Stmt stmt){
+		if(stmt==null || !stmt.containsInvokeExpr())
+			return null;
+		InvokeExpr ie = stmt.getInvokeExpr();
+		SootMethod sm = ie.getMethod();
+		if(!sm.getSignature().contains("SharedPreferences"))
+			return null;
+		if(sm.getName().equals("putBoolean") || 
+			sm.getName().equals("putFloat") ||
+			sm.getName().equals("putInt") ||
+			sm.getName().equals("putLong") ||
+			sm.getName().equals("putString") ||
+			sm.getName().equals("getBoolean") || 
+			sm.getName().equals("getFloat") ||
+			sm.getName().equals("getInt") ||
+			sm.getName().equals("getLong") ||
+			sm.getName().equals("getString") ){
+			Value v = ie.getArg(0);
+			if(v instanceof Constant){
+				try{
+					Constant c = (Constant)v;
+					return String.valueOf(c.toString());
+				}
+				catch(Exception e){
+					System.err.println("getPreferenceKey: " + e+" //"+stmt);
+				}
+			}
+		}
+		return null;
+	}
+	
+	
 	private List<FlowPath> lst;
 	/* Key: the FlowPath's id
 	 * Value: a list of View Id associated with this flow. */
@@ -38,7 +96,13 @@ public class FlowPathSet {
 	private Set<String> eventRegistryMethodSet = null;
 	//activity class name -> set of Layout IDs
 	private Map<String, Set<Integer>> activityLayoutMap; 
+	private Map<Stmt, Set<Stmt>> preferenceValue2ViewMap; //e.g., putBoolean(...) -> Set<Stmt>(findViewById(...))
+	private Map<String, Set<Integer>> preferenceKey2ViewIDMap;
 	
+	public Map<Stmt, Set<Stmt>> getPreferenceValue2ViewMap() {
+		return preferenceValue2ViewMap;
+	}
+
 	public Map<String, List<Stmt>> getRegistryMap() {
 		return registryMap;
 	}
@@ -77,6 +141,8 @@ public class FlowPathSet {
 		
 		buildEventRegisteryMapAndActivityLayoutMap();
 		viewFlowMap = new HashMap<Integer, Set<Integer>>();
+		preferenceValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
+		preferenceKey2ViewIDMap = new HashMap<String, Set<Integer>>();
 	}
 
 	public void addFlowPath(FlowPath fp){
@@ -84,11 +150,44 @@ public class FlowPathSet {
 			System.out.println("NULIST: ERROR: failed to addFlowPath: the path has been added already.");
 			return ;
 		}
+		
+		if(fp.getSource().getSource().toString().contains("android.view.View findViewById(int)")){
+			//System.out.println("DDD findViewById get stmt:"+fp.getSource().getSource().toString());
+			if(fp.getSink().getSink().toString().contains("android.content.SharedPreferences$Editor put")){
+				//System.out.println("DDD SharedPreferences: "+fp.getSink().getSink().toString());
+				Stmt src = fp.getSource().getSource();
+				Stmt sink = fp.getSink().getSink();
+				String key = getPreferenceKey(sink);
+				Integer viewID = getViewIdFromStmt(src);
+				if(preferenceValue2ViewMap.containsKey(sink))
+					preferenceValue2ViewMap.get(sink).add(src);
+				else{
+					Set<Stmt> set = new HashSet<Stmt>();
+					set.add(src);
+					preferenceValue2ViewMap.put(sink, set);
+				}
+				if(key!=null && viewID!=null){
+					System.out.println("Found one map: "+key+" => "+viewID);
+					if(preferenceKey2ViewIDMap.containsKey(key))
+						preferenceKey2ViewIDMap.get(key).add(viewID);
+					else{
+						Set<Integer> set = new HashSet<Integer>();
+						set.add(viewID);
+						preferenceKey2ViewIDMap.put(key, set);
+					}
+				}
+			}
+			return ;
+		}
 
 		fp.setId(lst.size());
 		lst.add(fp);
 	}
 	
+	public Map<String, Set<Integer>> getPreferenceKey2ViewIDMap() {
+		return preferenceKey2ViewIDMap;
+	}
+
 	public List<Integer> findFlowPath(Stmt s, IInfoflowCFG icfg){
 		 List<Integer> rs = new ArrayList<Integer>();
 		 for(int i=0; i<lst.size(); i++){
@@ -239,6 +338,13 @@ public class FlowPathSet {
 			Set<Integer> viewids = new HashSet<Integer>();
 			viewFlowMap.put(flowId, viewids);
 			viewids.add(viewId);
+		}
+	}
+	
+	public void displayFlowPaths(){
+		System.out.println("Display all the flowpath:");
+		for(FlowPath fp : lst){
+			System.out.println("Flow:"+fp.getSource()+" => "+fp.getSink());
 		}
 	}
 }

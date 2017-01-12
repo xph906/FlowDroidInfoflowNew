@@ -250,7 +250,6 @@ public class FlowPath {
 			System.out.println("Building Full Path: "+cnt+++" Size:"+lst.size());
 			for(Stmt s : lst){
 				pathStmtMap.put(buildStmtSignature(s, icfg), s);
-//				List<ValueBox> boxes = s.getUseBoxes();
 				System.out.println("  "+icfg.getMethodOf(s).getName()+":"+s);
 			}
 		}
@@ -306,7 +305,6 @@ public class FlowPath {
 			return ;	
 		for(Stmt s : lst)
 			if(isSameStmt(s, stmt)){
-				System.out.println("found the same stmt");
 				return ;
 			}
 			
@@ -397,5 +395,13 @@ public class FlowPath {
 		catch(Exception e){
 			return source.getSource()+" => "+sink.getSink();
 		}
+	}
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		for(List<Stmt> lst : pathRS){
+			for(Stmt stmt : lst)
+				sb.append(stmt.toString()+" || ");
+		}
+		return sb.toString();
 	}
 }
