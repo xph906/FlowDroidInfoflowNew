@@ -407,7 +407,7 @@ public class Infoflow extends AbstractInfoflow {
 				
 			});
 		}
-
+		//TODO: for fast analyzing functions, I disable static analysis temporarily.
 		forwardSolver.solve();
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
 		
