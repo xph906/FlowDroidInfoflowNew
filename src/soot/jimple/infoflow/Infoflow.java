@@ -208,6 +208,8 @@ public class Infoflow extends AbstractInfoflow {
 	private void findAllFindViewByIdMethods(){
 		
 	}
+	
+	
 	/**
 	 * Conducts a taint analysis on an already initialized callgraph
 	 * @param sourcesSinks The sources and sinks to be used
@@ -407,7 +409,6 @@ public class Infoflow extends AbstractInfoflow {
 				
 			});
 		}
-		//TODO: for fast analyzing functions, I disable static analysis temporarily.
 		forwardSolver.solve();
 		maxMemoryConsumption = Math.max(maxMemoryConsumption, getUsedMemory());
 		

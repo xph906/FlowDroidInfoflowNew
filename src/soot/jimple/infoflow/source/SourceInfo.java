@@ -98,4 +98,14 @@ public class SourceInfo {
 	public Set<AccessPath> getAccessPaths(){
 		return this.accessPaths;
 	}
+	
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append("SourceInfo: ");
+		if(accessPaths != null){
+			for(AccessPath ap : accessPaths)
+				sb.append(",AP:"+ap.toString());
+		}
+		return sb.toString();
+	}
 }
