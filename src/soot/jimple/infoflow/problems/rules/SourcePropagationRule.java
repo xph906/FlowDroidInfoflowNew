@@ -90,7 +90,13 @@ public class SourcePropagationRule extends AbstractTaintPropagationRule {
 	public Collection<Abstraction> propagateCallToReturnFlow(Abstraction d1,
 			Abstraction source, Stmt stmt, ByReferenceBoolean killSource,
 			ByReferenceBoolean killAll) {
-		return propagate(d1, source, stmt, killSource, null);
+		
+		Collection<Abstraction> rs = propagate(d1, source, stmt, killSource, null);
+//		if(stmt.toString().contains("boolean add(java.lang.Object") && rs!=null){
+//			System.out.println("WWW propagateCallToReturnFlow: "+stmt);
+//			System.out.println("    propagateCallToReturnFlow: "+rs.size());
+//		}
+		return rs;
 	}
 
 	@Override
@@ -104,6 +110,9 @@ public class SourcePropagationRule extends AbstractTaintPropagationRule {
 	public Collection<Abstraction> propagateCallFlow(Abstraction d1,
 			Abstraction source, Stmt stmt, SootMethod dest,
 			ByReferenceBoolean killAll) {
+		
+		//System.out.println("SSS: "+source.getCurrentStmt());
+		
 		// Normally, we don't inspect source methods
 		if (!getManager().getConfig().getInspectSources()
 				&& getManager().getSourceSinkManager() != null) {

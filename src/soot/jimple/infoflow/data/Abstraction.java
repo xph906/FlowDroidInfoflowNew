@@ -514,6 +514,7 @@ public class Abstraction implements Cloneable, FastSolverLinkedNode<Abstraction,
 				}
 			}
 			this.neighbors.add(originalAbstraction);
+			//System.out.println("ADDNEI:"+originalAbstraction.getCurrentStmt()+" VS "+this.currentStmt);
 		}
 	}
 	

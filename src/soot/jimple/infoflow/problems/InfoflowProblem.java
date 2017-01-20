@@ -108,9 +108,32 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 	}
 	
 	private void taintFlow(Unit src, Abstraction source, String msg){
+//		try{
+//			Stmt stmt2 = (Stmt)src;
+//			if(stmt2.containsInvokeExpr()){
+//				InvokeExpr ie = stmt2.getInvokeExpr();
+//				if(ie.getMethod().getName().equals("findViewById") && ie.getArg(0) instanceof Local){
+//					System.out.println("Hit "+stmt2+" @"+msg);
+//					System.out.println("  taint:"+source.getCurrentStmt());
+//					Abstraction abs = source;
+//					while(abs.getPredecessor() != null)
+//						abs = abs.getPredecessor();
+//					if(abs.getCurrentStmt().toString().contains("2131558507")){
+//						abs = source;
+//						while(abs.getPredecessor() != null){
+//							System.out.println("  detail:"+abs.getCurrentStmt());
+//							abs = abs.getPredecessor();
+//						}
+//						System.out.println("  detail:"+abs.getCurrentStmt());
+//					}
+//				}
+//			}
+//		}
+//		catch(Exception e){
+//			
+//		}
 		if(fps != null && src instanceof Stmt && !source.getAccessPath().isEmpty()){
 			
-			Stmt stmt2 = (Stmt)src;
 			List<Integer> lfp = fps.findFlowPath((Stmt)src, interproceduralCFG());
 			boolean doTaint = false;
 			//if current stmt is in the path of one flow
@@ -197,6 +220,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 	
 	@Override
 	public FlowFunctions<Unit, Abstraction, SootMethod> createFlowFunctionsFactory() {
+		
 		return new FlowFunctions<Unit, Abstraction, SootMethod>() {
 			
 			/**
@@ -518,7 +542,8 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 			@Override
 			public FlowFunction<Abstraction> getCallFlowFunction(final Unit src, final SootMethod dest) {
-				
+				//System.out.println("GETCALLFLOWFUN: "+src);
+				//System.out.println("  "+dest.isConcrete());
                 if (!dest.isConcrete()){
                     logger.debug("Call skipped because target has no body: {} -> {}", src, dest);
                     return KillAll.v();
@@ -887,10 +912,14 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				final SootMethod callee = invExpr.getMethod();
 				final boolean hasValidCallees = hasValidCallees(call);
 				
+				
+				
 				return new SolverCallToReturnFlowFunction() {
 
 					@Override
 					public Set<Abstraction> computeTargets(Abstraction d1, Abstraction source) {
+						
+						
 						Set<Abstraction> res = computeTargetsInternal(d1, source);
 //						System.out.println("getCallToReturnFlowFunction cal:"+call);
 //						System.out.println("getCallToReturnFlowFunction ret:"+returnSite);
@@ -908,6 +937,9 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						if (manager.getConfig().getStopAfterFirstFlow() && !results.isEmpty())
 							return Collections.emptySet();
 						
+//						if(call.toString().contains("boolean add(java.lang.Object")){
+//							System.out.println("WWW1:"+call);	
+//						}
 						// Notify the handler if we have one
 						if (taintPropagationHandler != null)
 							taintPropagationHandler.notifyFlowIn(call, source, interproceduralCFG(),
@@ -918,6 +950,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								&& source.getAccessPath().isStaticFieldRef())
 							return Collections.emptySet();
 						
+//						if(call.toString().contains("boolean add(java.lang.Object")){
+//							System.out.println("WWW2:"+call);
+//						}
+						
 						//check inactive elements:
 						final Abstraction newSource;
 						if (!source.isAbstractionActive() && (call == source.getActivationUnit()
@@ -926,10 +962,15 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						else
 							newSource = source;
 						
+//						if(call.toString().contains("boolean add(java.lang.Object")){
+//							System.out.println("WWW3:"+newSource);
+//						}
+						
 						ByReferenceBoolean killSource = new ByReferenceBoolean();
 						ByReferenceBoolean killAll = new ByReferenceBoolean();
 						Set<Abstraction> res = propagationRules.applyCallToReturnFlowFunction(
 								d1, newSource, iCallStmt, killSource, killAll, true);
+						
 						if (killAll.value)
 							return Collections.emptySet();
 						boolean passOn = !killSource.value;
@@ -968,6 +1009,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 											iCallStmt, newSource)))) {
 							// If one of the callers does not read the value, we must pass it on
 							// in any case
+							
 							boolean allCalleesRead = true;
 							outer : for (SootMethod callee : interproceduralCFG().getCalleesOfCallAt(call)) {
 								if (callee.isConcrete() && callee.hasActiveBody()) {

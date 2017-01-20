@@ -160,6 +160,18 @@ public class Infoflow extends AbstractInfoflow {
 		// Run the analysis
         runAnalysis(sourcesSinks, null);
 	}
+	
+	public void initializeSootWithoutPerformingInfoflow(String appPath, String libPath,
+			IEntryPointCreator entryPointCreator){
+		initializeSoot(appPath, libPath, entryPointCreator.getRequiredClasses());
+
+		// entryPoints are the entryPoints required by Soot to calculate Graph - if there is no main method,
+		// we have to create a new main method and use it as entryPoint and store our real entryPoints
+		Scene.v().setEntryPoints(Collections.singletonList(entryPointCreator.createDummyMain()));
+		constructCallgraph();
+		iCfg = icfgFactory.buildBiDirICFG(config.getCallgraphAlgorithm(),
+        		config.getEnableExceptionTracking());
+	}
 
 	@Override
 	public void computeInfoflow(String appPath, String libPath, String entryPoint,

@@ -28,10 +28,13 @@ import soot.toolkits.graph.UnitGraph;
 import soot.util.queue.QueueReader;
 
 public class GraphTool {
-	static String outputFolder = "/home/xpan/Projects/AndroidDataflow/output/";
+	static String outputFolder = "/tmp/";
 	//static String outputFolder = "/Users/xpan/Documents/projects/dataflow-project/output/";
 	static public void displayGraph(UnitGraph g, SootMethod m){
 		displayGraph(g, m.getSignature(), g.getHeads(), false);
+	}
+	static public void setOutputFolder(String dir){
+		outputFolder = dir;
 	}
 	
 	static public void displayAllMethodGraph(){

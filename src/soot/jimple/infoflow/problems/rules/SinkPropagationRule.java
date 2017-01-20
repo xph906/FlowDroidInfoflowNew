@@ -83,8 +83,12 @@ public class SinkPropagationRule extends AbstractTaintPropagationRule {
 							.getAccessPath().getPlainValue())
 					&& getManager().getSourceSinkManager().isSink(stmt,
 							getManager().getICFG(), source.getAccessPath()))
+//				System.out.println("RESULTS1:"+getResults().getResults().size());
+//				System.out.println("RESULTS:"+source.getCurrentStmt()+" // "+stmt);
 				if (!getResults().addResult(new AbstractionAtSink(source, stmt)))
 					killState = true;
+//				System.out.println("RESULTS2:"+getResults().getResults().size());
+				
 		}
 	}
 
@@ -155,9 +159,12 @@ public class SinkPropagationRule extends AbstractTaintPropagationRule {
 					&& getAliasing().mayAlias(source.getAccessPath().getPlainValue(),
 							returnStmt.getOp())
 					&& getManager().getSourceSinkManager().isSink(returnStmt,
-							getManager().getICFG(), source.getAccessPath()))
+							getManager().getICFG(), source.getAccessPath())){
 				if (!getResults().addResult(new AbstractionAtSink(source, returnStmt)))
 					killState = true;
+			}
+			
+				
 		}
 		
 		// If we are in the kill state, we stop the analysis
