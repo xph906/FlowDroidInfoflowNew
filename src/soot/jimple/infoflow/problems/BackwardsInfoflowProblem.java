@@ -80,6 +80,12 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 		fSolver = forwardSolver;
 	}
 	
+	private void taintFlow(Unit src, Abstraction source, String msg){
+//		System.out.println("BackwardTaintFlow:"+msg);
+//		System.out.println("  SRC:"+src);
+//		System.out.println("  ABS:"+source+"\n");
+	}
+	
 	@Override
 	public FlowFunctions<Unit, Abstraction, SootMethod> createFlowFunctionsFactory() {
 		return new FlowFunctions<Unit, Abstraction, SootMethod>() {
@@ -401,7 +407,10 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							if (source == getZeroValue())
 								return Collections.emptySet();
 							assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
-							
+							taintFlow(src, source, "NormalFlow");
+//							System.out.println("NormalFlow: "+src+" @"+interproceduralCFG().getMethodOf(src));
+//							System.out.println("     dst  : "+dest);
+//							System.out.println("     ABS  : "+source+"\n");
 							// Notify the handler if we have one
 							if (taintPropagationHandler != null)
 								taintPropagationHandler.notifyFlowIn(src, source, interproceduralCFG(),
@@ -412,6 +421,11 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							if (destDefStmt != null && interproceduralCFG().isExitStmt(destDefStmt))
 								for (Abstraction abs : res)
 									computeAliases(destDefStmt, destLeftValue, d1, abs);
+							
+							if(res!=null && res.size()>0){
+								for(Abstraction abs : res)
+									taintFlow(src, abs, "NormalFlow2");
+							}
 							
 							return notifyOutFlowHandlers(src, d1, source, res,
 									FlowFunctionType.NormalFlowFunction);
@@ -455,6 +469,10 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						if (source == getZeroValue())
 							return Collections.emptySet();
 						assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
+//						System.out.println("CallFlow: "+src);
+//						System.out.println("     dst: "+dest);
+//						System.out.println("     ABS: "+source);
+						taintFlow(src, source, "CallFlow");
 						
 						// Notify the handler if we have one
 						if (taintPropagationHandler != null)
@@ -571,6 +589,11 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							}
 						}
 						
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(src, abs, "CallFlow2");
+						}
+						
 						return notifyOutFlowHandlers(src, d1, source, res,
 								FlowFunctionType.CallFlowFunction);
 					}
@@ -605,6 +628,8 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						if (source == getZeroValue())
 							return Collections.emptySet();
 						assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
+						
+						taintFlow(callSite, source, "RetFlow");
 						
 						// If we have no caller, we have nowhere to propagate. This
 						// can happen when leaving the main method.
@@ -711,6 +736,11 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							if (abs != source)
 								abs.setCorrespondingCallSite((Stmt) callSite);
 						
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(callSite, abs, "RetFlow2");
+						}
+						
 						return notifyOutFlowHandlers(exitStmt, d1, source, res,
 								FlowFunctionType.ReturnFlowFunction);
 					}
@@ -737,7 +767,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						if (source == getZeroValue())
 							return Collections.emptySet();
 						assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
-						
+						taintFlow(call, source, "CallToReturn");
 						// Notify the handler if we have one
 						if (taintPropagationHandler != null)
 							taintPropagationHandler.notifyFlowIn(call, source, interproceduralCFG(),
@@ -791,7 +821,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						for (int i = 0; i < callArgs.length; i++)
 							if (callArgs[i] == source.getAccessPath().getPlainValue())
 								return Collections.emptySet();
-												
+						
 						return notifyOutFlowHandlers(call, d1, source, Collections.singleton(source),
 								FlowFunctionType.CallToReturnFlowFunction);
 					}

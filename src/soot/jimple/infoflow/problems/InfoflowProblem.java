@@ -145,14 +145,15 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					Value v = vb.getValue();
 					if(source.getAccessPath().isLocal()){
 						if(v instanceof Local && v.equals(source.getAccessPath().getPlainValue())){
-							//System.out.println("Local equal: "+v);
+							//System.out.println("DDD:Local equal: "+source.getAccessPath()+ " vs "+src);
 							doTaint = true;
 						}
 					}
 					else if(source.getAccessPath().isStaticFieldRef()){
 						if(v instanceof StaticFieldRef){
+					
 							if(((StaticFieldRef)v).getField().equals(source.getAccessPath().getLastField())){
-								//System.out.println("StaticFieldRef equal: "+v);
+								//System.out.println("DDD:StaticFieldRef equal: "+source.getAccessPath()+ " vs "+v);
 								doTaint = true;
 							}
 						}
@@ -162,25 +163,27 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							InstanceFieldRef ifr = (InstanceFieldRef)v;
 							if(ifr.getBase().equals(source.getAccessPath().getPlainValue())){
 								if(ifr.getField().equals(source.getAccessPath().getLastField())){
-									//System.out.println("InstanceFieldRef equal: "+v);
+									//System.out.println("DDD:InstanceFieldRef equal: "+source.getAccessPath()+ " vs "+ifr);
 									doTaint = true;
+								}
+								else{
+									//System.out.println("DDD:InstanceFieldRef NOT equal: "+source.getAccessPath()+ " vs "+ifr);
 								}
 							}
 						}
 					}
 					else{
-						System.out.println("Unknown type accesspath: ");
+						System.out.println("NULIST: Unknown type accesspath: "+source.getAccessPath()+" "+v.getClass());
 					}
 				}
 			}
 			//taint and correlate view and flow
 			if(doTaint){
-				//System.out.println("ALERT: "+msg+"dotaint: "+src);
-				
 				//for findViewById
 				Abstraction taintSource = source;
 				Integer intVal = null;
 				while(taintSource!=null){	
+					//System.out.println("  TaintSrc:"+taintSource.getCurrentStmt()+" ||");
 					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
 					if(intVal !=null){
 						//System.out.println("  SRC INT:"+taintSource.getCurrentStmt());
@@ -209,8 +212,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					Set<Integer> ids = fps.getPreferenceKey2ViewIDMap().get(key);
 					if(ids != null){
 						for(int flowId : lfp){
-							for(int viewId : ids)
+							for(int viewId : ids){
 								fps.addViewFlowMapping(flowId, viewId);
+								System.out.println("NULIST: AddViewFlowMaping via Preference:"+flowId+"->"+viewId);
+							}
 						}
 					}
 				}
@@ -533,6 +538,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							}
 						}
 						
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(src, abs, "NormalFlow2");
+						}							
+						
 						// Return what we have so far
 						return res == null || res.isEmpty() ? Collections.<Abstraction>emptySet() : res;
 					}
@@ -567,6 +577,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						taintFlow(src, source, "CallFlow");
 						
 						Set<Abstraction> res = computeTargetsInternal(d1, source);
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(src, abs, "CallFlow2");
+						}
+						
 						if (!res.isEmpty())
 							for (Abstraction abs : res)
 								aliasingStrategy.injectCallingContext(abs, solver, dest, src, source, d1);
@@ -670,6 +685,11 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						taintFlow(callSite, source, "ReturnFlow");
 						
 						Set<Abstraction> res = computeTargetsInternal(source, callerD1s);
+						
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(callSite, abs, "ReturnFlow");
+						}
 						return notifyOutFlowHandlers(exitStmt, d1, source, res,
 								FlowFunctionType.ReturnFlowFunction);
 					}
@@ -925,6 +945,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 //						System.out.println("getCallToReturnFlowFunction ret:"+returnSite);
 //						System.out.println("    Taint:"+source.getAccessPath());
 						taintFlow(call, source, "CallToReturn");
+						if(res!=null && res.size()>0){
+							for(Abstraction abs : res)
+								taintFlow(call, abs, "CallToReturn2");
+						}
 						
 //						System.out.println("Call2Ret: "+iCallStmt.getInvokeExpr()+"||"+d1);
 //						for(Abstraction abs : res)

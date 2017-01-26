@@ -41,7 +41,8 @@ public class FlowPath {
 	ResultSourceInfo source;
 	IInfoflowCFG icfg;
 	CallGraph cg;
-	List<List<Stmt>> pathRS;
+	//List<List<Stmt>> pathRS;
+	List<Stmt> fullPath;
 	//stmt@method -> Stmt
 	Map<String, Stmt> pathStmtMap;
 	boolean debug = false;
@@ -55,6 +56,7 @@ public class FlowPath {
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Map<String, String> eventListenerMap, Set<String> lifeCycleEventListenerSet,
 			Map<String, List<Stmt>> registryMap){
+		System.out.println("Start FlowPath: "+source.getSource()+"=>"+sink.getSink());
 		this.icfg = icfg;
 		this.pathStmtMap = new HashMap<String, Stmt>();
 		this.source = source;
@@ -67,19 +69,24 @@ public class FlowPath {
 		this.declaringClassSet = new HashSet<String>();
 		//TODO: the name should be changed.
 		this.allTrigerMethodSet = new HashSet<String>();
-		
-		pathRS = new ArrayList<List<Stmt>>();
-		buildFlowFullPath(source.getPath());
+		fullPath = new ArrayList<Stmt>();
 		List<Stmt> triggers = findFlowTrigger();
-		//TODO: the order of pathRS is no use, so we might change it's type to
-		// List<Stmt>, including the affected stmts.
 		if(triggers.size() > 0){
+			System.out.println("  Displaying triggers:"+triggers.size());
 			for(Stmt stmt : triggers){
+				//TODO: change the key to stmt
 				pathStmtMap.put(buildStmtSignature(stmt, icfg), stmt);
+				fullPath.add(stmt);
+				System.out.println("    "+stmt);
 			}
-			pathRS.add(triggers);
 		}
+		buildFlowFullPath(source.getPath());
+		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink());
 		
+//		if(declaringClassSet.size() == 0 && source.getPath()!=null && source.getPath().length>0){
+//			System.err.println("Alert an declaring Class because of no class.");
+//			declaringClassSet.add(icfg.getMethodOf(source.getPath()[0]).getDeclaringClass().getName() );
+//		}
 	}
 	
 	//TODO: no use
@@ -112,6 +119,7 @@ public class FlowPath {
 	private List<Stmt> findFlowTrigger(){
 		
 		System.out.println("NULIST: Start finding trigger for flow: "+this.source.getSource()+"=>"+sink.getSink());
+		System.out.flush();
 		//Stmt src = this.source.getSource();
 		if(this.icfg==null){
 			System.out.println("NULIST DEBUG: no parent method for source");
@@ -135,7 +143,7 @@ public class FlowPath {
 			//a regular method could be declared as event handler
 			allTrigerMethodSet.add(sm.getName());
 			if(this.eventListenerMap.containsKey(sm.getName()) ){
-				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
+				//System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
 				if(lst == null) continue;
 				for(Stmt s : lst){
@@ -160,12 +168,14 @@ public class FlowPath {
 					SootMethod predecessor = edge.getSrc().method();
 					if(predecessor == null) continue;
 					if(!visited.contains(predecessor.getSignature())){
+						visited.add(predecessor.getSignature());
 						queue.add(predecessor);
 					}
 				}
 			}
 		}
 		System.out.println("NULIST: Done finding trigger for flow: "+this.source.getSource());
+		System.out.flush();
 		if(rs.size() > 0){
 			for(Stmt stmt: rs)
 				System.out.println("NULIST:  event stmt: "+stmt);
@@ -180,6 +190,7 @@ public class FlowPath {
 			System.out.println("NULIST:  no trigger found!");
 		}
 		
+		//System.out.println("Done findFlowTrigger");
 		return rs;
 	}
 	
@@ -207,11 +218,15 @@ public class FlowPath {
 	}
 	
 	private void buildFlowFullPath(Stmt[] path){
-		List<List<Stmt>> rs = pathRS;
+		List<Stmt> rs = fullPath;
 		if(path == null) return ;
 //		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
 //			debug = true;
+		System.out.println("  Start building full path:");
+		
 		for(int i=0; i<path.length-1; i++){
+			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
+			System.out.flush();
 			Stmt cur = path[i];
 			Stmt next = path[i+1];
 			SootMethod curMethod = icfg.getMethodOf(cur);
@@ -223,79 +238,106 @@ public class FlowPath {
 //				//System.out.println("DEBUG6: --"+curMethod.getSignature().equals(anObject));
 //			}
 			if(curMethod.getSignature().equals(nextMethod.getSignature())){
-				List<List<Stmt>> subrs = addStmtIntraProcedure(curMethod, cur, next);
-				addMultipleGroupStmtsToList(rs, subrs);
+				//the two stmts are in the same procedure,
+				//so we need to exttract all stmts between these two
+				//this is an intra-procedure analysis
+				List<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
+				for(Stmt stmt : subrs)
+					addStmtToList(rs, stmt);
 			}
 			else {
 				if(cur.containsInvokeExpr()){
 					InvokeExpr ie = cur.getInvokeExpr();
 					if(ie.getMethod().getSignature().equals(nextMethod.getSignature())){
-						//System.out.println("DEBUG: "+ie+" VS "+nextMethod);
-						addOneStmtToList(rs, cur); //add current function call
-						List<List<Stmt>> subrs = addStmtIntraProcedure(nextMethod, null, next);
-						addMultipleGroupStmtsToList(rs, subrs); //add stmts from the begining.
+						//if current stmt is a call stmt and the next stmt is the stmt in called method
+						addStmtToList(rs, cur); //add current function call
+						List<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
+						for(Stmt stmt : subrs)
+							addStmtToList(rs, stmt);
 					}
 					else 
-						addOneStmtToList(rs, cur);
+						addStmtToList(rs, cur);
 				}
 				else {
-					addOneStmtToList(rs, cur);
+					addStmtToList(rs, cur);
 				}
 			}
 		}
-		addOneStmtToList(rs, path[path.length-1]);
 		
-		int cnt = 0;
-		for(List<Stmt> lst : rs){
-			System.out.println("Building Full Path: "+cnt+++" Size:"+lst.size());
-			for(Stmt s : lst){
-				pathStmtMap.put(buildStmtSignature(s, icfg), s);
-				System.out.println("  "+icfg.getMethodOf(s).getName()+":"+s);
-			}
+		addStmtToList(rs, path[path.length-1]);
+		System.out.println(" Done building Full Path:  Size:"+rs.size());
+		System.out.flush();
+		for(Stmt s : rs){
+			pathStmtMap.put(buildStmtSignature(s, icfg), s);
+			System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
 		}
 	}
 	
-	private void addMultipleGroupStmtsToList(List<List<Stmt>> lst, List<List<Stmt>> adds){
-		if(lst.size() == 0){
-			for(List<Stmt> la : adds)
-				lst.add(la);
-		}
-		else{
-			for(List<Stmt> l : lst){
-				for(List<Stmt> la : adds){
-					for(Stmt s : la)
-						addStmtToList(l, s);
-				}
-			}
-		}
-	}
-	private void addOneStmtToList(List<List<Stmt>> lst, Stmt stmt){
-		if(lst.size() == 0){
-			List<Stmt> tmp = new ArrayList<Stmt>();
-			tmp.add(stmt);
-			lst.add(tmp);
-		}
-		else{
-			for(List<Stmt> l : lst){
-				for(Stmt s : l)
-					if(s.equals(stmt))
-						return;
-				addStmtToList(l, stmt);
-			}
-		}
-	}
+//	private void addMultipleGroupStmtsToList(List<List<Stmt>> lst, List<List<Stmt>> adds){
+//		if(lst.size() == 0){
+//			for(List<Stmt> la : adds)
+//				lst.add(la);
+//		}
+//		else{
+//			for(List<Stmt> l : lst){
+//				for(List<Stmt> la : adds){
+//					for(Stmt s : la)
+//						addStmtToList(l, s);
+//				}
+//			}
+//		}
+//	}
+//	private void addOneStmtToList(List<List<Stmt>> lst, Stmt stmt){
+//		if(lst.size() == 0){
+//			List<Stmt> tmp = new ArrayList<Stmt>();
+//			tmp.add(stmt);
+//			lst.add(tmp);
+//		}
+//		else{
+//			for(List<Stmt> l : lst){
+//				for(Stmt s : l)
+//					if(s.equals(stmt))
+//						return;
+//				addStmtToList(l, stmt);
+//			}
+//		}
+//	}
+	
 	private boolean isSameStmt(Stmt s1, Stmt s2){
+		boolean rs = false;
+		if(s1.equals(s2))
+			rs = true;
+		
 		if(s1.toString().equals(s2.toString())){
 			SootMethod m1 = icfg.getMethodOf(s1);
 			SootMethod m2 = icfg.getMethodOf(s2);
-			if(m1==null && m2==null)
+			if(m1==null && m2==null){
+				if(rs == false){
+					System.err.println("ALERT isSameStmt 1:"+s1+" vs "+s2);
+				}
 				return true;
-			else if(m1==null || m2==null)
+			}
+			else if(m1==null || m2==null){
+				if(rs == true){
+					System.err.println("ALERT isSameStmt 2:"+s1+" vs "+s2);
+				}
 				return false;
-			else if(m1.getSignature().equals(m2.getSignature()))
+			}
+			else if(m1.getSignature().equals(m2.getSignature())){
+				if(rs == false){
+					//TODO: modify this case.
+					//System.err.println("ALERT isSameStmt 3:"+s1+" vs "+s2);
+					
+				}
 				return true;
+			}
+			else{
+				if(rs == true){
+					System.err.println("ALERT isSameStmt 4:"+s1+" vs "+s2);
+				}
+			}
 		}
-		return false;
+		return rs;
 	}
 	
 	private void addStmtToList(List<Stmt> lst, Stmt stmt){
@@ -307,68 +349,54 @@ public class FlowPath {
 			if(isSameStmt(s, stmt)){
 				return ;
 			}
-			
-//			if(s.equals(stmt))
-//				return ;
-//			else if (s.toString().equals(stmt.toString())){
-//				System.out.println("Two Stmt equal based on string:");
-//				System.out.println("  :"+s+" VS "+stmt);
-//				
-//				boolean rs = icfg.getMethodOf(s).toString().equals(icfg.getMethodOf(stmt).toString());
-//				System.out.println("  method::"+rs+" "+icfg.getMethodOf(s)+" // "+icfg.getMethodOf(stmt));
-//				
-//			}
 		lst.add(stmt);
 	}
 	
-	private List<List<Stmt>> addStmtIntraProcedure(SootMethod method, Stmt cur, Stmt end){
-		List<List<Stmt>> rs = new ArrayList<List<Stmt>>();
-		List<Stmt> curRS = new ArrayList<Stmt>();
+	private List<Stmt> addStmtIntraProcedure(SootMethod method, Stmt cur, Stmt end){
+		List<Stmt> rs = new ArrayList<Stmt>();
 		//rs.add(curRS);
 		
 		if(!method.hasActiveBody() && cur!=null){
-			curRS.add(cur);
+			rs.add(cur);
 			return rs;
 		}
 		else if(!method.hasActiveBody()){
 			return rs;
 		}
 		UnitGraph g = new ExceptionalUnitGraph(method.getActiveBody());
+		//if cur is null, starts from the heads
 		if(cur == null){
 			for(Unit u : g.getHeads())
-				addStmtIntraProcedureHelper(g, (Stmt)u, end, curRS, rs, new HashSet<Stmt>());
+				addStmtIntraProcedureHelper(g, (Stmt)u, end, rs);
 			return rs;
 		}
-		
-		addStmtIntraProcedureHelper(g, cur, end, curRS, rs, new HashSet<Stmt>());
-		return rs;
+		else{
+			addStmtIntraProcedureHelper(g, cur, end, rs);
+			return rs;
+		}
 	}
 	
-	private void addStmtIntraProcedureHelper(UnitGraph g, Stmt cur, Stmt end, List<Stmt> curRS, List<List<Stmt>> rs, Set<Stmt> visited){
-		//curRS remain the same when returned.
+	private void addStmtIntraProcedureHelper(UnitGraph g, Stmt cur, Stmt end, List<Stmt> rs){
+		//System.out.println("addStmtIntraProcedureHelper:"+" "+cur+" =>"+end+" "+g.hashCode());
+		System.out.flush();
 		if(cur.equals(end)){
-			List<Stmt> newRS = new ArrayList<Stmt>();
-			for(Stmt s : curRS)
-				newRS.add(s);
-			rs.add(newRS);
-			return ;
+			return;
 		}
-		
-//		if(debug){
-//			//System.out.println("DEBUG6: 1 "+method);
-//			System.out.println("DEBUG6: 2 "+cur );
-//			System.out.println("DEBUG6: 3 "+end +"\n");
-//		}
-		
-		curRS.add(cur);
+		Set<Stmt> visited = new HashSet<Stmt>();
 		visited.add(cur);
-		for(Unit u : g.getSuccsOf(cur)){
-			Stmt s = (Stmt)u;
-			if(visited.contains(s)) continue;
-			addStmtIntraProcedureHelper(g, (Stmt)u, end, curRS, rs, visited);
+		Queue<Stmt> queue = new LinkedList<Stmt>();
+		queue.add(cur);
+		
+		while(!queue.isEmpty()){
+			cur = queue.poll();
+			rs.add(cur);
+			for(Unit u : g.getSuccsOf(cur)){
+				Stmt s = (Stmt)u;
+				if(visited.contains(s)) continue;
+				visited.add(s);
+				queue.add(s);
+			}
 		}
-		visited.remove(cur);
-		curRS.remove(curRS.size()-1);
 	}
 	
 	public ResultSinkInfo getSink() {
@@ -396,12 +424,13 @@ public class FlowPath {
 			return source.getSource()+" => "+sink.getSink();
 		}
 	}
+	
 	public String toString(){
 		StringBuilder sb = new StringBuilder();
-		for(List<Stmt> lst : pathRS){
-			for(Stmt stmt : lst)
-				sb.append(stmt.toString()+" || ");
-		}
+		sb.append("PathBegin:\n");
+		for(Stmt stmt : fullPath)
+			sb.append("  "+stmt.toString()+"\n");
+		sb.append("PathEnd:\n");
 		return sb.toString();
 	}
 }

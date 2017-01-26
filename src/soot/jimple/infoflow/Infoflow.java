@@ -69,11 +69,17 @@ import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.infoflow.solver.fastSolver.BackwardsInfoflowSolver;
 import soot.jimple.infoflow.solver.fastSolver.InfoflowSolver;
 import soot.jimple.infoflow.source.ISourceSinkManager;
+import soot.jimple.infoflow.source.SourceInfo;
 import soot.jimple.infoflow.util.SootMethodRepresentationParser;
 import soot.jimple.infoflow.util.SystemClassHandler;
 import soot.jimple.toolkits.callgraph.CallGraph;
 import soot.jimple.toolkits.callgraph.ReachableMethods;
 import soot.options.Options;
+import soot.toolkits.graph.ExceptionalUnitGraph;
+import soot.toolkits.graph.Orderer;
+import soot.toolkits.graph.PseudoTopologicalOrderer;
+import soot.toolkits.graph.UnitGraph;
+import soot.util.queue.QueueReader;
 /**
  * main infoflow class which triggers the analysis and offers method to customize it.
  *
@@ -269,7 +275,27 @@ public class Infoflow extends AbstractInfoflow {
 		logger.info("Starting Taint Analysis");
         iCfg = icfgFactory.buildBiDirICFG(config.getCallgraphAlgorithm(),
         		config.getEnableExceptionTracking());
-
+        FlowPathSet.setCFG(iCfg);
+        
+        //=========================
+        //AccessPathBasedSourceSinkManager manager = (AccessPathBasedSourceSinkManager)sourcesSinks;
+//        for (QueueReader<MethodOrMethodContext> rdr =
+//				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
+//			SootMethod m = rdr.next().method();
+//			if(!m.hasActiveBody()) continue;
+//			
+//			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
+//		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
+//		    int cnt = 0;
+//		    for (Unit u : orderer.newList(g, false)) {
+//		    	SourceInfo si = sourcesSinks.getSourceInfo((Stmt)u, iCfg);
+//		    	if(sourcesSinks.getSourceInfo((Stmt)u, iCfg) != null){
+//		    		System.out.println("ABC: SOURCE: "+u+" :");
+//		    	}
+//		    }
+//		}
+        //=========================
+        
         int numThreads = Runtime.getRuntime().availableProcessors();
 		CountingThreadPoolExecutor executor = createExecutor(numThreads);
 

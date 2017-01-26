@@ -19,6 +19,7 @@ import soot.jimple.Stmt;
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
+import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.toolkits.graph.Orderer;
 import soot.toolkits.graph.PseudoTopologicalOrderer;
@@ -27,6 +28,11 @@ import soot.util.queue.QueueReader;
 
 public class FlowPathSet {
 	final String SET_CONTENT_VIEW = "setContentView";
+	
+	static private IInfoflowCFG icfg ;
+	static public void setCFG(IInfoflowCFG cfg){
+		icfg = cfg;
+	}
 	
 	//TODO: deal with non-constant case.
 	static public Integer getViewIdFromStmt(Stmt stmt){
@@ -37,7 +43,7 @@ public class FlowPathSet {
 		//TODO: add setContentView
 		if(sm.getName().equals("findViewById")){
 			//TODO: handle if findViewById is not a constant
-			//System.out.println("DEBUG2:"+ie.getArg(0));
+			System.out.println("DEBUG212:"+ie.getArg(0));
 			Value v = ie.getArg(0);
 			if(v instanceof Constant){
 				try{
@@ -49,11 +55,20 @@ public class FlowPathSet {
 					System.err.println("getViewIdFromStmt: " + e);
 				}
 			}
+			else {
+				GlobalData global = GlobalData.getInstance();
+				Integer id = global.getViewID(stmt, icfg);
+				if(id != null){
+					System.out.println("Find ID from Stmt: "+id);
+					return id;
+				}
+			}
 		}
 		return null;
 	}
 	
 	//TODO: deal with non-constant case.
+	//Should read data from GlobalData
 	static public String getPreferenceKey(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
 			return null;
@@ -78,8 +93,11 @@ public class FlowPathSet {
 					return String.valueOf(c.toString());
 				}
 				catch(Exception e){
-					System.err.println("getPreferenceKey: " + e+" //"+stmt);
+					System.err.println("error getPreferenceKey: " + e+" //"+stmt);
 				}
+			}
+			else{
+				System.out.println("NULIST: Cannot find the key for preference:"+stmt);
 			}
 		}
 		return null;
@@ -98,6 +116,7 @@ public class FlowPathSet {
 	private Map<String, Set<Integer>> activityLayoutMap; 
 	private Map<Stmt, Set<Stmt>> preferenceValue2ViewMap; //e.g., putBoolean(...) -> Set<Stmt>(findViewById(...))
 	private Map<String, Set<Integer>> preferenceKey2ViewIDMap;
+	
 	
 	public Map<Stmt, Set<Stmt>> getPreferenceValue2ViewMap() {
 		return preferenceValue2ViewMap;
@@ -167,7 +186,7 @@ public class FlowPathSet {
 					preferenceValue2ViewMap.put(sink, set);
 				}
 				if(key!=null && viewID!=null){
-					System.out.println("Found one map: "+key+" => "+viewID);
+					System.out.println("NULIST: PreferenceSet: Found one map: "+key+" => "+viewID);
 					if(preferenceKey2ViewIDMap.containsKey(key))
 						preferenceKey2ViewIDMap.get(key).add(viewID);
 					else{
@@ -177,6 +196,30 @@ public class FlowPathSet {
 					}
 				}
 			}
+			System.out.println("NULIST: Ignore Flow with findViewById Source:"+fp.getSource().getSource());
+			return ;
+		}
+		
+		if(fp.getSink().getSink().toString().contains("android.content.SharedPreferences$Editor put")){
+			System.out.println("NULIST: Ignore Flow with android.content.SharedPreferences$Editor sink:"+fp.getSink().getSink());
+			return ;
+		}
+		
+		if(fp.getSink().getSink().toString().contains("android.os.Bundle")){
+			System.out.println("NULIST: Ignore Flow with Bundle sink:"+fp.getSink().getSink());
+			return ;
+		}
+		if(fp.getSource().getSource().toString().contains("android.os.Bundle")){
+			System.out.println("NULIST: Ignore Flow with Bundle source:"+fp.getSource().getSource());
+			return ;
+		}
+		
+		if(fp.getSink().getSink().toString().contains("android.content.Intent")){
+			System.out.println("NULIST: Ignore Flow with Intent sink:"+fp.getSink().getSink());
+			return ;
+		}
+		if(fp.getSource().getSource().toString().contains("android.content.Intent")){
+			System.out.println("NULIST: Ignore Flow with Intent source:"+fp.getSource().getSource());
 			return ;
 		}
 
@@ -288,7 +331,22 @@ public class FlowPathSet {
 		    					}
 		    				}
 		    				else{
-		    					System.out.println("NULIST: alert: setContentView's arg is not constant:"+s);
+		    					GlobalData global = GlobalData.getInstance();
+		    					Integer id = global.getLayoutID(m.getDeclaringClass().getName());
+		    					String key = m.getDeclaringClass().getName();
+		    					if(id == null)
+		    						System.out.println("NULIST: alert: setContentView's arg is not constant:"+s+" "+m.getDeclaringClass().getName());
+		    					else{
+		    						System.out.println("NULIST: set Special ContnetViewID: "+id+" "+m.getDeclaringClass().getName());
+		    						if(activityLayoutMap.containsKey(key)){
+			    						activityLayoutMap.get(key).add(id);
+			    					}
+			    					else {
+			    						Set<Integer> set = new HashSet<Integer>();
+			    						set.add(id);
+			    						activityLayoutMap.put(key, set);
+			    					}
+		    					}
 		    				}
 		    			}
 		    			catch(Exception e){
@@ -302,7 +360,7 @@ public class FlowPathSet {
 		for(String cls : activityLayoutMap.keySet()){
 			Set<Integer> set = activityLayoutMap.get(cls);
 			for(Integer id : set){
-				System.out.println("LAYOUT:"+cls+" => "+id);
+				System.out.println("Display LAYOUT:"+cls+" => "+id);
 			}
 		}
 	}
