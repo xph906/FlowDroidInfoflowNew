@@ -103,6 +103,68 @@ public class FlowPathSet {
 		return null;
 	}
 	
+	//TODO: deal with non-constant case.
+	//Should read data from GlobalData
+	static public String getIntentKey(Stmt stmt){
+		if(stmt==null || !stmt.containsInvokeExpr())
+			return null;
+		InvokeExpr ie = stmt.getInvokeExpr();
+		SootMethod sm = ie.getMethod();
+		if(!sm.getDeclaringClass().getName().equals("android.content.Intent"))
+			return null;
+		if(sm.getParameterCount()<=0)
+			return null;
+		if(sm.getName().contains("get") || 
+			sm.getName().contains("put")){
+			Value v = ie.getArg(0);
+			if(v instanceof Constant){
+				try{
+					Constant c = (Constant)v;
+					//System.out.println("DEBUGINTENT:"+c+" S:"+stmt);
+					return String.valueOf(c.toString());
+				}
+				catch(Exception e){
+					System.err.println("error getIntentKey: " + e+" //"+stmt);
+				}
+			}
+			else{
+				System.out.println("NULIST: Cannot find the key for Intent:"+stmt);
+			}
+		}
+		return null;
+	}
+	
+	//TODO: deal with non-constant case.
+	//Should read data from GlobalData
+	static public String getBundleKey(Stmt stmt){
+		if(stmt==null || !stmt.containsInvokeExpr())
+			return null;
+		InvokeExpr ie = stmt.getInvokeExpr();
+		SootMethod sm = ie.getMethod();
+		if(!sm.getDeclaringClass().getName().equals("android.os.Bundle"))
+			return null;
+		if(sm.getParameterCount()<=0)
+			return null;
+		if(sm.getName().contains("get") || 
+			sm.getName().contains("put")){
+			Value v = ie.getArg(0);
+			if(v instanceof Constant){
+				try{
+					Constant c = (Constant)v;
+					//System.out.println("DEBUGBUNDLE:"+c+" S:"+stmt);
+					return String.valueOf(c.toString());
+				}
+				catch(Exception e){
+					System.err.println("error getBundleKey: " + e+" //"+stmt);
+				}
+			}
+			else{
+				System.out.println("NULIST: Cannot find the key for Bundle:"+stmt);
+			}
+		}
+		return null;
+	}
+	
 	
 	private List<FlowPath> lst;
 	/* Key: the FlowPath's id
@@ -114,10 +176,30 @@ public class FlowPathSet {
 	private Set<String> eventRegistryMethodSet = null;
 	//activity class name -> set of Layout IDs
 	private Map<String, Set<Integer>> activityLayoutMap; 
+	
 	private Map<Stmt, Set<Stmt>> preferenceValue2ViewMap; //e.g., putBoolean(...) -> Set<Stmt>(findViewById(...))
 	private Map<String, Set<Integer>> preferenceKey2ViewIDMap;
 	
+	private Map<Stmt, Set<Stmt>> intentValue2ViewMap;
+	private Map<String, Set<Integer>> intentKey2ViewIDMap;
 	
+	private Map<Stmt, Set<Stmt>> bundleValue2ViewMap;
+	private Map<String, Set<Integer>> bundleKey2ViewIDMap;
+	
+	private Map<String, Set<FlowPath>> intentSinkMap;
+	private Map<String, Set<FlowPath>> intentSourceMap;
+	private Map<String, Set<FlowPath>> bundleSinkMap;
+	private Map<String, Set<FlowPath>> bundleSourceMap;
+	
+	
+	public Map<String, Set<Integer>> getIntentKey2ViewIDMap() {
+		return intentKey2ViewIDMap;
+	}
+
+	public Map<String, Set<Integer>> getBundleKey2ViewIDMap() {
+		return bundleKey2ViewIDMap;
+	}
+
 	public Map<Stmt, Set<Stmt>> getPreferenceValue2ViewMap() {
 		return preferenceValue2ViewMap;
 	}
@@ -162,6 +244,17 @@ public class FlowPathSet {
 		viewFlowMap = new HashMap<Integer, Set<Integer>>();
 		preferenceValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
 		preferenceKey2ViewIDMap = new HashMap<String, Set<Integer>>();
+		
+		intentValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
+		intentKey2ViewIDMap = new HashMap<String, Set<Integer>>();
+		
+		bundleValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
+		bundleKey2ViewIDMap = new HashMap<String, Set<Integer>>();
+		
+		intentSinkMap = new HashMap<String, Set<FlowPath>>();
+		intentSourceMap = new HashMap<String, Set<FlowPath>>();
+		bundleSinkMap = new HashMap<String, Set<FlowPath>>();
+		bundleSourceMap = new HashMap<String, Set<FlowPath>>();
 	}
 
 	public void addFlowPath(FlowPath fp){
@@ -196,7 +289,73 @@ public class FlowPathSet {
 					}
 				}
 			}
+			else if(fp.getSink().getSink().toString().contains("android.content.Intent: android.content.Intent put")){
+				System.out.println("NULIST: IntentSet: "+fp.getSink().getSink().toString());
+				Stmt src = fp.getSource().getSource();
+				Stmt sink = fp.getSink().getSink();
+				String key = getIntentKey(sink);
+				Integer viewID = getViewIdFromStmt(src);
+				if(intentValue2ViewMap.containsKey(sink))
+					intentValue2ViewMap.get(sink).add(src);
+				else{
+					Set<Stmt> set = new HashSet<Stmt>();
+					set.add(src);
+					intentValue2ViewMap.put(sink, set);
+				}
+				if(key!=null && viewID!=null){
+					System.out.println("NULIST: IntentSet: Found one map: "+key+" => "+viewID);
+					if(intentKey2ViewIDMap.containsKey(key))
+						intentKey2ViewIDMap.get(key).add(viewID);
+					else{
+						Set<Integer> set = new HashSet<Integer>();
+						set.add(viewID);
+						intentKey2ViewIDMap.put(key, set);
+					}
+				}
+			}
+			else if(fp.getSink().getSink().toString().contains("android.os.Bundle: void put")){
+				System.out.println("NULIST: BundleSet: "+fp.getSink().getSink().toString());
+				Stmt src = fp.getSource().getSource();
+				Stmt sink = fp.getSink().getSink();
+				String key = getBundleKey(sink);
+				Integer viewID = getViewIdFromStmt(src);
+				if(bundleValue2ViewMap.containsKey(sink))
+					bundleValue2ViewMap.get(sink).add(src);
+				else{
+					Set<Stmt> set = new HashSet<Stmt>();
+					set.add(src);
+					bundleValue2ViewMap.put(sink, set);
+				}
+				if(key!=null && viewID!=null){
+					System.out.println("NULIST: BundleSet: Found one map: "+key+" => "+viewID);
+					if(bundleKey2ViewIDMap.containsKey(key))
+						bundleKey2ViewIDMap.get(key).add(viewID);
+					else{
+						Set<Integer> set = new HashSet<Integer>();
+						set.add(viewID);
+						bundleKey2ViewIDMap.put(key, set);
+					}
+				}
+			}
+			
 			System.out.println("NULIST: Ignore Flow with findViewById Source:"+fp.getSource().getSource());
+			System.out.println("  "+fp.getSink().getSink());
+			if(fp.getSink().getSink().toString().contains("android.os.Bundle: void put")){
+				
+			}
+			else if(fp.getSink().getSink().toString().contains("android.content.Intent: android.content.Intent put")){
+				Stmt sink = fp.getSink().getSink();
+				String key = getIntentKey(sink);
+				if(key != null){
+					if(intentSinkMap.containsKey(key))
+						intentSinkMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						intentSinkMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
 			return ;
 		}
 		
@@ -207,24 +366,74 @@ public class FlowPathSet {
 		
 		if(fp.getSink().getSink().toString().contains("android.os.Bundle")){
 			System.out.println("NULIST: Ignore Flow with Bundle sink:"+fp.getSink().getSink());
+			System.out.println("  "+fp.getSource().getSource());
 			return ;
 		}
 		if(fp.getSource().getSource().toString().contains("android.os.Bundle")){
 			System.out.println("NULIST: Ignore Flow with Bundle source:"+fp.getSource().getSource());
+			System.out.println("  "+fp.getSink().getSink());
 			return ;
 		}
 		
 		if(fp.getSink().getSink().toString().contains("android.content.Intent")){
 			System.out.println("NULIST: Ignore Flow with Intent sink:"+fp.getSink().getSink());
+			System.out.println("  "+fp.getSource().getSource());
+			
+			if(!fp.getSource().getSource().toString().contains("android.content.Intent")){
+				Stmt sink = fp.getSink().getSink();
+				String key = getIntentKey(sink);
+				if(key != null){
+					if(intentSinkMap.containsKey(key))
+						intentSinkMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						intentSinkMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
+			
 			return ;
 		}
 		if(fp.getSource().getSource().toString().contains("android.content.Intent")){
 			System.out.println("NULIST: Ignore Flow with Intent source:"+fp.getSource().getSource());
+			System.out.println("  "+fp.getSink().getSink());
+			
+			if(!fp.getSink().getSink().toString().contains("android.content.Intent")){
+				Stmt source = fp.getSource().getSource();
+				String key = getIntentKey(source);
+				if(key != null){
+					if(intentSourceMap.containsKey(key))
+						intentSourceMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						intentSourceMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
 			return ;
 		}
-
+		
 		fp.setId(lst.size());
 		lst.add(fp);
+	}
+	
+	public void handleInterComponent(){
+		for(String key : intentSinkMap.keySet()){
+			Set<FlowPath> sources = intentSinkMap.get(key);
+			Set<FlowPath> sinks = intentSourceMap.get(key);
+			if(sinks == null) continue;
+			for(FlowPath source : sources){
+				for(FlowPath sink : sinks){
+					FlowPath fp = new FlowPath(source, sink);
+					System.out.println("INTERCOMPONENT ADD NEW FLOW: "+key+" FP:"+fp.getTag());
+					fp.setId(lst.size());
+					lst.add(fp);
+				}
+			}
+		}
+		//TODO: Bundle
 	}
 	
 	public Map<String, Set<Integer>> getPreferenceKey2ViewIDMap() {

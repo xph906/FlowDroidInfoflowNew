@@ -43,6 +43,7 @@ public class FlowPath {
 	CallGraph cg;
 	//List<List<Stmt>> pathRS;
 	List<Stmt> fullPath;
+	Stmt[] path;
 	//stmt@method -> Stmt
 	Map<String, Stmt> pathStmtMap;
 	boolean debug = false;
@@ -67,9 +68,9 @@ public class FlowPath {
 		this.lifeCycleEventListenerSet = lifeCycleEventListenerSet;
 		this.id = -1;
 		this.declaringClassSet = new HashSet<String>();
-		//TODO: the name should be changed.
 		this.allTrigerMethodSet = new HashSet<String>();
 		fullPath = new ArrayList<Stmt>();
+		this.path = this.source.getPath();
 		List<Stmt> triggers = findFlowTrigger();
 		if(triggers.size() > 0){
 			System.out.println("  Displaying triggers:"+triggers.size());
@@ -87,6 +88,40 @@ public class FlowPath {
 //			System.err.println("Alert an declaring Class because of no class.");
 //			declaringClassSet.add(icfg.getMethodOf(source.getPath()[0]).getDeclaringClass().getName() );
 //		}
+	}
+	public FlowPath(FlowPath sourceFP, FlowPath sinkFP){
+		this.icfg = sourceFP.icfg;
+		this.pathStmtMap = new HashMap<String, Stmt>();
+		this.source = sourceFP.getSource();
+		this.sink = sinkFP.getSink();
+		this.cg =  sourceFP.cg;
+		this.registryMap = sourceFP.registryMap;
+		this.eventListenerMap = sourceFP.eventListenerMap;
+		this.lifeCycleEventListenerSet = sourceFP.lifeCycleEventListenerSet;
+		this.id = -1;
+		this.declaringClassSet = new HashSet<String>();
+		this.allTrigerMethodSet = new HashSet<String>();
+		fullPath = new ArrayList<Stmt>();
+		this.path = new Stmt[sourceFP.path.length+sinkFP.source.getPath().length];
+		int i =0;
+		for(Stmt stmt : sourceFP.path)
+			this.path[i++] = stmt;
+		for(Stmt stmt : sinkFP.path)
+			this.path[i++] = stmt;
+		
+		List<Stmt> triggers = findFlowTrigger();
+		if(triggers.size() > 0){
+			System.out.println("  Displaying triggers:"+triggers.size());
+			for(Stmt stmt : triggers){
+				//TODO: change the key to stmt
+				pathStmtMap.put(buildStmtSignature(stmt, icfg), stmt);
+				fullPath.add(stmt);
+				System.out.println("    "+stmt);
+			}
+		}
+		buildFlowFullPath(this.path);
+		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink());
+		
 	}
 	
 	//TODO: no use
@@ -129,7 +164,7 @@ public class FlowPath {
 		Queue<SootMethod> queue = new LinkedList<SootMethod>();
 		Set<String> visited = new HashSet<String>();
 		
-		for(Stmt stmt : source.getPath()){
+		for(Stmt stmt : this.path){
 			SootMethod sm = icfg.getMethodOf(stmt);
 			if(visited.contains(sm.getSignature()))
 				continue;

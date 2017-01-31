@@ -219,6 +219,48 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						}
 					}
 				}
+				
+				taintSource = source;
+				key = null;
+				while(taintSource != null){	
+					key = FlowPathSet.getIntentKey(taintSource.getCurrentStmt());
+					if(key !=null){
+						//System.out.println("  SRC STRING:"+taintSource.getCurrentStmt()+" V:"+key);
+						break;
+					}
+					taintSource = taintSource.getPredecessor();
+				}
+				if(key != null){
+					Set<Integer> ids = fps.getIntentKey2ViewIDMap().get(key);
+					if(ids != null){
+						for(int flowId : lfp){
+							for(int viewId : ids){
+								fps.addViewFlowMapping(flowId, viewId);
+								System.out.println("NULIST: AddViewFlowMaping via Intent:"+flowId+"->"+viewId);
+							}
+						}
+					}
+				}
+				
+				taintSource = source;
+				key = null;
+				while(taintSource != null){	
+					key = FlowPathSet.getBundleKey(taintSource.getCurrentStmt());
+					if(key !=null)
+						break;
+					taintSource = taintSource.getPredecessor();
+				}
+				if(key != null){
+					Set<Integer> ids = fps.getBundleKey2ViewIDMap().get(key);
+					if(ids != null){
+						for(int flowId : lfp){
+							for(int viewId : ids){
+								fps.addViewFlowMapping(flowId, viewId);
+								System.out.println("NULIST: AddViewFlowMaping via Bundle:"+flowId+"->"+viewId);
+							}
+						}
+					}
+				}
 			}
 		}	
 	}

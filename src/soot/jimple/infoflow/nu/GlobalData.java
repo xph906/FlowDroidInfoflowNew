@@ -3,6 +3,7 @@ package soot.jimple.infoflow.nu;
 import java.util.HashMap;
 import java.util.Map;
 
+import soot.SootField;
 import soot.SootMethod;
 import soot.Unit;
 import soot.jimple.Stmt;
@@ -24,13 +25,29 @@ public class GlobalData {
 			new HashMap<String, Integer>();
 	final private Map<String, Integer> layoutIDMap = 
 			new HashMap<String, Integer>();
+	final private Map<String, Integer> fieldIDMap = 
+			new HashMap<String, Integer>();
+	
+	public static String getFieldKey(SootField sf){
+		return sf.getDeclaringClass() + "@" + sf.getName()+"@"+sf.getType();
+	}
 	
 	private GlobalData(){}
+	
+	public void addFieldID(SootField sf, Integer id){
+		System.out.println("Stored Field ID: "+getFieldKey(sf)+" => "+id);
+		//System.out.println("TODO: solve the duplicate cases");
+		fieldIDMap.put(getFieldKey(sf), id);
+	}
+	
+	public Integer getFieldID(SootField sf){
+		return fieldIDMap.get(getFieldKey(sf));
+	}
 	
 	public void addLayoutID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){
 		SootMethod sm = icfg.getMethodOf(stmt);
 		layoutIDMap.put(sm.getDeclaringClass().getName(), id);
-		System.out.println("StoreLayoutID: "+sm.getName()+" "+sm.getDeclaringClass().getName()+" ->"+id);
+		System.out.println("  StoreLayoutID: "+sm.getName()+" "+sm.getDeclaringClass().getName()+" ->"+id);
 	}
 	public Integer getLayoutID(String declaringClassName){
 		return layoutIDMap.get(declaringClassName);
