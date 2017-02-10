@@ -6,20 +6,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import heros.InterproceduralCFG;
+import soot.Local;
 import soot.MethodOrMethodContext;
 import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
 import soot.jimple.Constant;
+import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
-
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
+import soot.jimple.toolkits.scalar.ConstantPropagatorAndFolder;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.toolkits.graph.Orderer;
 import soot.toolkits.graph.PseudoTopologicalOrderer;
@@ -28,6 +33,21 @@ import soot.util.queue.QueueReader;
 
 public class FlowPathSet {
 	final String SET_CONTENT_VIEW = "setContentView";
+	final String INTENT_PUT_SIGNATURE_STR = "android.content.Intent: android.content.Intent put";
+	final String BUNDLE_PUT_SIGNATURE_STR = "android.os.Bundle: void put";
+	final String PREFERENCE_PUT_SIGNATURE_STR = "android.content.SharedPreferences$Editor put";
+	final String FIND_VIEW_BY_ID_SIGNATURE_STR = "android.view.View findViewById(int)";
+	
+	final String INTENT_GET_PATTERN = "android\\.content\\.Intent\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	final Pattern intentGetPattern = Pattern.compile(INTENT_GET_PATTERN);
+	
+	final String BUNDLE_GET_PATTERN = "android\\.os\\.Bundle\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	final Pattern bundleGetPattern = Pattern.compile(BUNDLE_GET_PATTERN);
+	
+	//android.content.SharedPreferences: boolean getBoolean(java.lang.String,boolean)
+	final String PREFERENCE_GET_PATTERN = "android\\.content\\.SharedPreferences\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	final Pattern preferenceGetPattern = Pattern.compile(PREFERENCE_GET_PATTERN);
+	//final AccessPathBasedSourceSinkManager 
 	
 	static private IInfoflowCFG icfg ;
 	static public void setCFG(IInfoflowCFG cfg){
@@ -43,7 +63,6 @@ public class FlowPathSet {
 		//TODO: add setContentView
 		if(sm.getName().equals("findViewById")){
 			//TODO: handle if findViewById is not a constant
-			System.out.println("DEBUG212:"+ie.getArg(0));
 			Value v = ie.getArg(0);
 			if(v instanceof Constant){
 				try{
@@ -190,6 +209,8 @@ public class FlowPathSet {
 	private Map<String, Set<FlowPath>> intentSourceMap;
 	private Map<String, Set<FlowPath>> bundleSinkMap;
 	private Map<String, Set<FlowPath>> bundleSourceMap;
+	private Map<String, Set<FlowPath>> preferenceSinkMap;
+	private Map<String, Set<FlowPath>> preferenceSourceMap;
 	
 	
 	public Map<String, Set<Integer>> getIntentKey2ViewIDMap() {
@@ -227,7 +248,7 @@ public class FlowPathSet {
 		this.lifeCycleEventListenerSet = new HashSet<String>();
 		this.eventListenerMap = new HashMap<String, String>();
 		/* Key:
-		 *   1. For eventRegistry (e.g., setOnClickListener), the key is the 
+		 *   1. For eventRer2 = virtualinvoke $r0.<com.android.insecurebankv2.LoginActivity: android.view.View findViewById(int)>(2131558527)gistry (e.g., setOnClickListener), the key is the 
 		 *      listener's type;
 		 *   2. For lifeCycleEventListener (e.g., onCreate), the key is composed 
 		 *      of the method's name and declaring class (the method's signature).
@@ -255,6 +276,8 @@ public class FlowPathSet {
 		intentSourceMap = new HashMap<String, Set<FlowPath>>();
 		bundleSinkMap = new HashMap<String, Set<FlowPath>>();
 		bundleSourceMap = new HashMap<String, Set<FlowPath>>();
+		preferenceSinkMap = new HashMap<String, Set<FlowPath>>();
+		preferenceSourceMap = new HashMap<String, Set<FlowPath>>();
 	}
 
 	public void addFlowPath(FlowPath fp){
@@ -263,10 +286,9 @@ public class FlowPathSet {
 			return ;
 		}
 		
-		if(fp.getSource().getSource().toString().contains("android.view.View findViewById(int)")){
-			//System.out.println("DDD findViewById get stmt:"+fp.getSource().getSource().toString());
-			if(fp.getSink().getSink().toString().contains("android.content.SharedPreferences$Editor put")){
-				//System.out.println("DDD SharedPreferences: "+fp.getSink().getSink().toString());
+		if(fp.getSource().getSource().toString().contains(FIND_VIEW_BY_ID_SIGNATURE_STR)){
+			if(fp.getSink().getSink().toString().contains(PREFERENCE_PUT_SIGNATURE_STR)){
+				//View to Preference Correlation
 				Stmt src = fp.getSource().getSource();
 				Stmt sink = fp.getSink().getSink();
 				String key = getPreferenceKey(sink);
@@ -279,7 +301,7 @@ public class FlowPathSet {
 					preferenceValue2ViewMap.put(sink, set);
 				}
 				if(key!=null && viewID!=null){
-					System.out.println("NULIST: PreferenceSet: Found one map: "+key+" => "+viewID);
+					System.out.println("NULIST: View2Preference: Found one map: "+key+" => "+viewID);
 					if(preferenceKey2ViewIDMap.containsKey(key))
 						preferenceKey2ViewIDMap.get(key).add(viewID);
 					else{
@@ -289,8 +311,9 @@ public class FlowPathSet {
 					}
 				}
 			}
-			else if(fp.getSink().getSink().toString().contains("android.content.Intent: android.content.Intent put")){
-				System.out.println("NULIST: IntentSet: "+fp.getSink().getSink().toString());
+			else if(fp.getSink().getSink().toString().contains(INTENT_PUT_SIGNATURE_STR)){
+				//View to Intent Correlation
+				//System.out.println("NULIST: IntentSet: "+fp.getSink().getSink().toString());
 				Stmt src = fp.getSource().getSource();
 				Stmt sink = fp.getSink().getSink();
 				String key = getIntentKey(sink);
@@ -303,7 +326,7 @@ public class FlowPathSet {
 					intentValue2ViewMap.put(sink, set);
 				}
 				if(key!=null && viewID!=null){
-					System.out.println("NULIST: IntentSet: Found one map: "+key+" => "+viewID);
+					System.out.println("NULIST: View2Intent: Found one map: "+key+" => "+viewID);
 					if(intentKey2ViewIDMap.containsKey(key))
 						intentKey2ViewIDMap.get(key).add(viewID);
 					else{
@@ -313,8 +336,9 @@ public class FlowPathSet {
 					}
 				}
 			}
-			else if(fp.getSink().getSink().toString().contains("android.os.Bundle: void put")){
-				System.out.println("NULIST: BundleSet: "+fp.getSink().getSink().toString());
+			else if(fp.getSink().getSink().toString().contains(BUNDLE_PUT_SIGNATURE_STR)){
+				//View to Bundle Correlation
+				//System.out.println("NULIST: BundleSet: "+fp.getSink().getSink().toString());
 				Stmt src = fp.getSource().getSource();
 				Stmt sink = fp.getSink().getSink();
 				String key = getBundleKey(sink);
@@ -327,7 +351,7 @@ public class FlowPathSet {
 					bundleValue2ViewMap.put(sink, set);
 				}
 				if(key!=null && viewID!=null){
-					System.out.println("NULIST: BundleSet: Found one map: "+key+" => "+viewID);
+					System.out.println("NULIST: View2Bundle: Found one map: "+key+" => "+viewID);
 					if(bundleKey2ViewIDMap.containsKey(key))
 						bundleKey2ViewIDMap.get(key).add(viewID);
 					else{
@@ -338,51 +362,22 @@ public class FlowPathSet {
 				}
 			}
 			
-			System.out.println("NULIST: Ignore Flow with findViewById Source:"+fp.getSource().getSource());
-			System.out.println("  "+fp.getSink().getSink());
-			if(fp.getSink().getSink().toString().contains("android.os.Bundle: void put")){
-				
-			}
-			else if(fp.getSink().getSink().toString().contains("android.content.Intent: android.content.Intent put")){
+			GlobalData gData = GlobalData.getInstance();
+			if(!gData.isSensitiveUISource(fp.getSource().getSource()))
+				return;
+		}//source is findViewByID.
+		
+		//The following is used for inter-component analysis
+		//Now source is guaranteed not to be non-password findViewById
+		//CASE: sink is Intent put and source contains sensitive data.
+		if(fp.getSink().getSink().toString().contains(INTENT_PUT_SIGNATURE_STR)){
+			//sensitive_data stored to intent
+			//store the information to intentSinkMap
+			if(isRealSource(fp.getSource().getSource()) ){
 				Stmt sink = fp.getSink().getSink();
 				String key = getIntentKey(sink);
 				if(key != null){
-					if(intentSinkMap.containsKey(key))
-						intentSinkMap.get(key).add(fp);
-					else{
-						Set<FlowPath> tmp = new HashSet<FlowPath>();
-						intentSinkMap.put(key, tmp);
-						tmp.add(fp);
-					}
-				}
-			}
-			return ;
-		}
-		
-		if(fp.getSink().getSink().toString().contains("android.content.SharedPreferences$Editor put")){
-			System.out.println("NULIST: Ignore Flow with android.content.SharedPreferences$Editor sink:"+fp.getSink().getSink());
-			return ;
-		}
-		
-		if(fp.getSink().getSink().toString().contains("android.os.Bundle")){
-			System.out.println("NULIST: Ignore Flow with Bundle sink:"+fp.getSink().getSink());
-			System.out.println("  "+fp.getSource().getSource());
-			return ;
-		}
-		if(fp.getSource().getSource().toString().contains("android.os.Bundle")){
-			System.out.println("NULIST: Ignore Flow with Bundle source:"+fp.getSource().getSource());
-			System.out.println("  "+fp.getSink().getSink());
-			return ;
-		}
-		
-		if(fp.getSink().getSink().toString().contains("android.content.Intent")){
-			System.out.println("NULIST: Ignore Flow with Intent sink:"+fp.getSink().getSink());
-			System.out.println("  "+fp.getSource().getSource());
-			
-			if(!fp.getSource().getSource().toString().contains("android.content.Intent")){
-				Stmt sink = fp.getSink().getSink();
-				String key = getIntentKey(sink);
-				if(key != null){
+					System.out.println("NULIST: Semi-flow: Data->IntentGet:"+fp.getSource().getSource());
 					if(intentSinkMap.containsKey(key))
 						intentSinkMap.get(key).add(fp);
 					else{
@@ -395,14 +390,16 @@ public class FlowPathSet {
 			
 			return ;
 		}
-		if(fp.getSource().getSource().toString().contains("android.content.Intent")){
-			System.out.println("NULIST: Ignore Flow with Intent source:"+fp.getSource().getSource());
-			System.out.println("  "+fp.getSink().getSink());
-			
-			if(!fp.getSink().getSink().toString().contains("android.content.Intent")){
+		//CASE: source is Intent get and sink is real sink
+		Matcher matcher = intentGetPattern.matcher(fp.getSource().getSource().toString());
+		if(matcher.find()){ //source is intent get and sink is not intent put
+			//data extracted from intent is sent out
+			//store the information to intentSourceMap.
+			if(isRealSink(fp.getSink().getSink())){
 				Stmt source = fp.getSource().getSource();
 				String key = getIntentKey(source);
 				if(key != null){
+					System.out.println("NULIST: Semi-flow: IntentGet->Sink:"+fp.getSink().getSink());
 					if(intentSourceMap.containsKey(key))
 						intentSourceMap.get(key).add(fp);
 					else{
@@ -414,10 +411,129 @@ public class FlowPathSet {
 			}
 			return ;
 		}
+		//CASE: sink is Bundle put and source contains sensitive data
+		if(fp.getSink().getSink().toString().contains(BUNDLE_PUT_SIGNATURE_STR)){
+//			System.out.println("NULIST: TODO: sink is Bundle put. "+fp.getSink().getSink());
+//			System.out.println("  "+fp.getSource().getSource());
+			if(isRealSource(fp.getSource().getSource())){
+				//TODO: store the sensitive source data to bundleSinkMap
+				Stmt sink = fp.getSink().getSink();
+				String key = getBundleKey(sink);
+				if(key != null){
+					System.out.println("NULIST: Semi-flow: Data->BundlPut:"+fp.getSource().getSource());
+					if(bundleSinkMap.containsKey(key))
+						bundleSinkMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						bundleSinkMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
+			return ;
+		}
+		//CASE: source is Bundle get and sink is real sink
+		matcher = bundleGetPattern.matcher(fp.getSource().getSource().toString());
+		if(matcher.find()){
+//			System.out.println("NULIST: TODO: source is Bundle get. "+fp.getSource().getSource());
+//			System.out.println("  "+fp.getSink().getSink());
+			if(isRealSink(fp.getSink().getSink())){
+				Stmt source = fp.getSource().getSource();
+				String key = getBundleKey(source);
+				if(key != null){
+					System.out.println("NULIST: Semi-flow: BundleGet->Sink:"+fp.getSink().getSink());
+					if(bundleSourceMap.containsKey(key))
+						bundleSourceMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						bundleSourceMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
+			return ;
+		}
+		//CASE: sink is Preference put and source contains sensitive data
+		if(fp.getSink().getSink().toString().contains(PREFERENCE_PUT_SIGNATURE_STR)){
+//			System.out.println("NULIST: TODO: sink is Preference put. "+fp.getSink().getSink());
+//			System.out.println("  "+fp.getSource().getSource());
+			if(isRealSource(fp.getSource().getSource())){
+				//TODO: store the sensitive source data to preferenceSinkMap
+				Stmt sink = fp.getSink().getSink();
+				String key = getPreferenceKey(sink);
+				if(key != null){
+					System.out.println("NULIST: Semi-flow: Data->PreferencePut:"+fp.getSource().getSource());
+					if(preferenceSinkMap.containsKey(key))
+						preferenceSinkMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						preferenceSinkMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
+			return ;
+		}
+		//CASE: source is Preference get and sink is real sink
+		matcher = preferenceGetPattern.matcher(fp.getSource().getSource().toString());
+		if(matcher.find()){
+//			System.out.println("NULIST: TODO: source is Preference get. "+fp.getSource().getSource());
+//			System.out.println("  "+fp.getSink().getSink());
+			if(isRealSink(fp.getSink().getSink())){
+				Stmt source = fp.getSource().getSource();
+				String key = getBundleKey(source);
+				if(key != null){
+					System.out.println("NULIST: Semi-flow: PreferenceGet->Sink:"+fp.getSink().getSink());
+					if(preferenceSourceMap.containsKey(key))
+						preferenceSourceMap.get(key).add(fp);
+					else{
+						Set<FlowPath> tmp = new HashSet<FlowPath>();
+						preferenceSourceMap.put(key, tmp);
+						tmp.add(fp);
+					}
+				}
+			}
+			return ;
+		}
 		
+		//For regular flows, we add them into list.
 		fp.setId(lst.size());
 		lst.add(fp);
 	}
+	
+	private boolean isRealSource(Stmt source){
+		Matcher intentGetMatcher = intentGetPattern.matcher(source.toString());
+		if(intentGetMatcher.find())
+			return false; //this is intent get.
+		
+		Matcher bundleGetMatcher = bundleGetPattern.matcher(source.toString());
+		if (bundleGetMatcher.find())
+			return false; //this is bundle get
+		
+		Matcher preferenceGetMatcher = preferenceGetPattern.matcher(source.toString());
+		if(preferenceGetMatcher.find()) //preference get
+			return false; 
+		
+		if(source.toString().contains(FIND_VIEW_BY_ID_SIGNATURE_STR)){
+			 //if findViewById is password field, it's a real source
+			GlobalData gd = GlobalData.getInstance();
+			if(!gd.isSensitiveUISource(source))
+				return false;
+		}
+		
+		return true;
+	}
+	
+	private boolean isRealSink(Stmt sink){
+		if(sink.toString().contains(INTENT_PUT_SIGNATURE_STR))
+			return false;
+		if(sink.toString().contains(BUNDLE_PUT_SIGNATURE_STR))
+			return false;
+		if(sink.toString().contains(PREFERENCE_PUT_SIGNATURE_STR))
+			return false;
+		return true;
+	}
+	
 	
 	public void handleInterComponent(){
 		for(String key : intentSinkMap.keySet()){
@@ -427,13 +543,38 @@ public class FlowPathSet {
 			for(FlowPath source : sources){
 				for(FlowPath sink : sinks){
 					FlowPath fp = new FlowPath(source, sink);
-					System.out.println("INTERCOMPONENT ADD NEW FLOW: "+key+" FP:"+fp.getTag());
+					System.out.println("INTERCOMPONENT ADD NEW FLOW 1: "+key+" FP:"+fp.getTag());
 					fp.setId(lst.size());
 					lst.add(fp);
 				}
 			}
 		}
-		//TODO: Bundle
+		for(String key : bundleSinkMap.keySet()){
+			Set<FlowPath> sources = bundleSinkMap.get(key);
+			Set<FlowPath> sinks = bundleSourceMap.get(key);
+			if(sinks == null) continue;
+			for(FlowPath source : sources){
+				for(FlowPath sink : sinks){
+					FlowPath fp = new FlowPath(source, sink);
+					System.out.println("INTERCOMPONENT ADD NEW FLOW 2: "+key+" FP:"+fp.getTag());
+					fp.setId(lst.size());
+					lst.add(fp);
+				}
+			}
+		}
+		for(String key : preferenceSinkMap.keySet()){
+			Set<FlowPath> sources = preferenceSinkMap.get(key);
+			Set<FlowPath> sinks = preferenceSourceMap.get(key);
+			if(sinks == null) continue;
+			for(FlowPath source : sources){
+				for(FlowPath sink : sinks){
+					FlowPath fp = new FlowPath(source, sink);
+					System.out.println("INTERCOMPONENT ADD NEW FLOW 3: "+key+" FP:"+fp.getTag());
+					fp.setId(lst.size());
+					lst.add(fp);
+				}
+			}
+		}
 	}
 	
 	public Map<String, Set<Integer>> getPreferenceKey2ViewIDMap() {

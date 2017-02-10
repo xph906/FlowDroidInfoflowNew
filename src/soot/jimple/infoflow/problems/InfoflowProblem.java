@@ -197,19 +197,46 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				}
 				
 				//for Preference
-				//TODO: can be optimized here for performance.
 				taintSource = source;
 				String key = null;
+				int tag = 0;
 				while(taintSource != null){	
 					key = FlowPathSet.getPreferenceKey(taintSource.getCurrentStmt());
 					if(key !=null){
-						//System.out.println("  SRC STRING:"+taintSource.getCurrentStmt()+" V:"+key);
+						System.out.println("  NULIST: taint with Preference Key:"+key);
+						tag = 1;
+						break;
+					}
+					key = FlowPathSet.getIntentKey(taintSource.getCurrentStmt());
+					if(key != null){
+						System.out.println("  NULIST: taint with Intent Key:"+key);
+						tag = 2;
+						break;
+					}
+					key = FlowPathSet.getBundleKey(taintSource.getCurrentStmt());
+					if(key != null){
+						System.out.println("  NULIST: taint with Bundle Key:"+key);
+						tag = 3;
 						break;
 					}
 					taintSource = taintSource.getPredecessor();
 				}
 				if(key != null){
-					Set<Integer> ids = fps.getPreferenceKey2ViewIDMap().get(key);
+					Set<Integer> ids = null;
+					switch (tag){
+						case 1:
+							ids = fps.getPreferenceKey2ViewIDMap().get(key);
+							break;
+						case 2:
+							ids = fps.getIntentKey2ViewIDMap().get(key);
+							break;
+						case 3:
+							ids = fps.getBundleKey2ViewIDMap().get(key);
+							break;
+						default:
+							break;
+					}
+					
 					if(ids != null){
 						for(int flowId : lfp){
 							for(int viewId : ids){
@@ -219,48 +246,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						}
 					}
 				}
-				
-				taintSource = source;
-				key = null;
-				while(taintSource != null){	
-					key = FlowPathSet.getIntentKey(taintSource.getCurrentStmt());
-					if(key !=null){
-						//System.out.println("  SRC STRING:"+taintSource.getCurrentStmt()+" V:"+key);
-						break;
-					}
-					taintSource = taintSource.getPredecessor();
-				}
-				if(key != null){
-					Set<Integer> ids = fps.getIntentKey2ViewIDMap().get(key);
-					if(ids != null){
-						for(int flowId : lfp){
-							for(int viewId : ids){
-								fps.addViewFlowMapping(flowId, viewId);
-								System.out.println("NULIST: AddViewFlowMaping via Intent:"+flowId+"->"+viewId);
-							}
-						}
-					}
-				}
-				
-				taintSource = source;
-				key = null;
-				while(taintSource != null){	
-					key = FlowPathSet.getBundleKey(taintSource.getCurrentStmt());
-					if(key !=null)
-						break;
-					taintSource = taintSource.getPredecessor();
-				}
-				if(key != null){
-					Set<Integer> ids = fps.getBundleKey2ViewIDMap().get(key);
-					if(ids != null){
-						for(int flowId : lfp){
-							for(int viewId : ids){
-								fps.addViewFlowMapping(flowId, viewId);
-								System.out.println("NULIST: AddViewFlowMaping via Bundle:"+flowId+"->"+viewId);
-							}
-						}
-					}
-				}
+
 			}
 		}	
 	}

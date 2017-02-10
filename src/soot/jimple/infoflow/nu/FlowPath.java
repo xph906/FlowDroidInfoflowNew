@@ -468,4 +468,21 @@ public class FlowPath {
 		sb.append("PathEnd:\n");
 		return sb.toString();
 	}
+	public String toSourceSinkString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append(source.getSource().toString());
+		sb.append("=>");
+		sb.append(sink.getSink().toString());
+		return sb.toString();
+	}
+	
+	public boolean equal(FlowPath fp2){
+		if(toSourceSinkString().equals(fp2.toSourceSinkString()))
+			return true;
+		return false;
+	}
+	
+	public int hashCode(){
+		return toSourceSinkString().hashCode();
+	}
 }
