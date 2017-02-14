@@ -32,6 +32,14 @@ public class GlobalData {
 			new HashMap<String, Integer>();
 	final private Map<String, Integer> fieldIDMap = 
 			new HashMap<String, Integer>();
+	boolean enableInterComponent = false;
+	
+	public void setEnableInterComponent(boolean flag){
+		this.enableInterComponent = flag;
+	}
+	public boolean enableInterComponent(){
+		return this.enableInterComponent;
+	}
 	
 	public static String getFieldKey(SootField sf){
 		return sf.getDeclaringClass() + "@" + sf.getName()+"@"+sf.getType();

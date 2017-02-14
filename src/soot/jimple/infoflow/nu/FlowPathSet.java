@@ -54,6 +54,7 @@ public class FlowPathSet {
 		icfg = cfg;
 	}
 	
+	
 	//TODO: deal with non-constant case.
 	static public Integer getViewIdFromStmt(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
@@ -195,6 +196,7 @@ public class FlowPathSet {
 	private Set<String> eventRegistryMethodSet = null;
 	//activity class name -> set of Layout IDs
 	private Map<String, Set<Integer>> activityLayoutMap; 
+	private Set<String> addedFlowSet;
 	
 	private Map<Stmt, Set<Stmt>> preferenceValue2ViewMap; //e.g., putBoolean(...) -> Set<Stmt>(findViewById(...))
 	private Map<String, Set<Integer>> preferenceKey2ViewIDMap;
@@ -278,11 +280,17 @@ public class FlowPathSet {
 		bundleSourceMap = new HashMap<String, Set<FlowPath>>();
 		preferenceSinkMap = new HashMap<String, Set<FlowPath>>();
 		preferenceSourceMap = new HashMap<String, Set<FlowPath>>();
+		
+		addedFlowSet = new HashSet<String>();
 	}
 
 	public void addFlowPath(FlowPath fp){
 		if(fp.getId() != -1){
 			System.out.println("NULIST: ERROR: failed to addFlowPath: the path has been added already.");
+			return ;
+		}
+		if(addedFlowSet.contains(fp.getSignature())){
+			System.out.println("NULIST: ERROR: failed to addFlowPath: the path has been added already2.");
 			return ;
 		}
 		
@@ -499,6 +507,7 @@ public class FlowPathSet {
 		//For regular flows, we add them into list.
 		fp.setId(lst.size());
 		lst.add(fp);
+		addedFlowSet.add(fp.getSignature());
 	}
 	
 	private boolean isRealSource(Stmt source){

@@ -151,7 +151,6 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					}
 					else if(source.getAccessPath().isStaticFieldRef()){
 						if(v instanceof StaticFieldRef){
-					
 							if(((StaticFieldRef)v).getField().equals(source.getAccessPath().getLastField())){
 								//System.out.println("DDD:StaticFieldRef equal: "+source.getAccessPath()+ " vs "+v);
 								doTaint = true;
@@ -241,7 +240,8 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						for(int flowId : lfp){
 							for(int viewId : ids){
 								fps.addViewFlowMapping(flowId, viewId);
-								System.out.println("NULIST: AddViewFlowMaping via Preference:"+flowId+"->"+viewId);
+								System.out.println("NULIST: AddViewFlowMaping via "+tag+":"+flowId+"->"+viewId);
+								
 							}
 						}
 					}

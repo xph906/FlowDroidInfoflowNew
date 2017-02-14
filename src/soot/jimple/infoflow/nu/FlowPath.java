@@ -16,6 +16,7 @@ import soot.Unit;
 import soot.ValueBox;
 import soot.jimple.BreakpointStmt;
 import soot.jimple.IdentityStmt;
+import soot.jimple.IfStmt;
 import soot.jimple.InvokeExpr;
 import soot.jimple.MonitorStmt;
 import soot.jimple.RetStmt;
@@ -45,7 +46,7 @@ public class FlowPath {
 	List<Stmt> fullPath;
 	Stmt[] path;
 	//stmt@method -> Stmt
-	Map<String, Stmt> pathStmtMap;
+	private Map<String, Stmt> pathStmtMap;
 	boolean debug = false;
 
 	private Map<String, String> eventListenerMap = null;
@@ -252,7 +253,7 @@ public class FlowPath {
 			return s.toString()+"@"+curMethod.getSignature();
 	}
 	
-	private void buildFlowFullPath(Stmt[] path){
+	private void buildFlowFullPath_(Stmt[] path){
 		List<Stmt> rs = fullPath;
 		if(path == null) return ;
 //		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
@@ -276,7 +277,7 @@ public class FlowPath {
 				//the two stmts are in the same procedure,
 				//so we need to exttract all stmts between these two
 				//this is an intra-procedure analysis
-				List<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
+				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
 				for(Stmt stmt : subrs)
 					addStmtToList(rs, stmt);
 			}
@@ -286,7 +287,7 @@ public class FlowPath {
 					if(ie.getMethod().getSignature().equals(nextMethod.getSignature())){
 						//if current stmt is a call stmt and the next stmt is the stmt in called method
 						addStmtToList(rs, cur); //add current function call
-						List<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
+						Set<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
 						for(Stmt stmt : subrs)
 							addStmtToList(rs, stmt);
 					}
@@ -300,6 +301,58 @@ public class FlowPath {
 		}
 		
 		addStmtToList(rs, path[path.length-1]);
+		System.out.println(" Done building Full Path:  Size:"+rs.size());
+		System.out.flush();
+		for(Stmt s : rs){
+			pathStmtMap.put(buildStmtSignature(s, icfg), s);
+			System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
+		}
+	}
+	
+	private void buildFlowFullPath(Stmt[] path){
+		
+		List<Stmt> rs = fullPath;
+		rs.add(source.getSource());
+		if(path == null) return ;
+//		System.out.println("  Start building full path:");
+		
+		for(int i=0; i<path.length-1; i++){
+//			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
+//			System.out.flush();
+			Stmt cur = path[i];
+			Stmt next = path[i+1];
+			SootMethod curMethod = icfg.getMethodOf(cur);
+			SootMethod nextMethod = icfg.getMethodOf(next);
+			
+			if(curMethod.getSignature().equals(nextMethod.getSignature())){
+				//the two stmts are in the same procedure,
+				//so we need to extract all predicate stmts between these two
+				//this is an intra-procedure analysis
+				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
+				for(Stmt stmt : subrs)
+					addStmtToList(rs, stmt);
+			}
+			else {
+				if(cur.containsInvokeExpr()){
+					InvokeExpr ie = cur.getInvokeExpr();
+					if(ie.getMethod().getSignature().equals(nextMethod.getSignature())){
+						//if current stmt is a call stmt and the next stmt is the stmt in called method
+						addStmtToList(rs, cur); //add current function call
+						Set<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
+						for(Stmt stmt : subrs)
+							addStmtToList(rs, stmt);
+					}
+					else 
+						addStmtToList(rs, cur);
+				}
+				else {
+					addStmtToList(rs, cur);
+				}
+			}
+		}
+		
+		addStmtToList(rs, path[path.length-1]);
+		rs.add(sink.getSink());
 		System.out.println(" Done building Full Path:  Size:"+rs.size());
 		System.out.flush();
 		for(Stmt s : rs){
@@ -376,19 +429,21 @@ public class FlowPath {
 	}
 	
 	private void addStmtToList(List<Stmt> lst, Stmt stmt){
-		if(stmt instanceof IdentityStmt || stmt instanceof BreakpointStmt ||
-				stmt instanceof MonitorStmt || stmt instanceof RetStmt || 
-				stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt)
-			return ;	
+//		if(stmt instanceof IdentityStmt || stmt instanceof BreakpointStmt ||
+//				stmt instanceof MonitorStmt || stmt instanceof RetStmt || 
+//				stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt)
+//			return ;	
+//		
+		if(!stmt.branches()) return ;
 		for(Stmt s : lst)
-			if(isSameStmt(s, stmt)){
+			if(s == stmt)
 				return ;
-			}
+		
 		lst.add(stmt);
 	}
 	
-	private List<Stmt> addStmtIntraProcedure(SootMethod method, Stmt cur, Stmt end){
-		List<Stmt> rs = new ArrayList<Stmt>();
+	private Set<Stmt> addStmtIntraProcedure(SootMethod method, Stmt cur, Stmt end){
+		Set<Stmt> rs = new HashSet<Stmt>();
 		//rs.add(curRS);
 		
 		if(!method.hasActiveBody() && cur!=null){
@@ -411,9 +466,45 @@ public class FlowPath {
 		}
 	}
 	
-	private void addStmtIntraProcedureHelper(UnitGraph g, Stmt cur, Stmt end, List<Stmt> rs){
+	//-1: not hit
+	// 1: hit
+	// 0: might hit and might not hit.
+	private int hitStmt(Stmt beg, Stmt target, UnitGraph g, Set<Stmt> visited){
+		Queue<Stmt> queue = new LinkedList<Stmt>();
+		visited.add(beg);
+		queue.add(beg);
+		boolean hit = false;
+		boolean miss = false;
+		while(!queue.isEmpty()){
+			Stmt cur = queue.poll();
+			if(cur == target)
+				hit = true;
+			else{
+				for(Unit u : g.getSuccsOf(cur)){
+					if(visited.contains((Stmt)u))
+						continue;
+					visited.add((Stmt)u);
+					int sub = hitStmt((Stmt)u, target, g, visited);
+					if (sub == 0) return 0;
+					else if(sub == 1)
+						hit = true;
+					else
+						miss = true;
+				}
+			}
+		}
+		if(hit && miss)
+			return 0;
+		else if(!hit && !miss)
+			return -1;
+		else if(hit)
+			return 1;
+		else
+			return -1;
+	}
+	
+	private void addStmtIntraProcedureHelper(UnitGraph g, Stmt cur, Stmt end, Set<Stmt> rs){
 		//System.out.println("addStmtIntraProcedureHelper:"+" "+cur+" =>"+end+" "+g.hashCode());
-		System.out.flush();
 		if(cur.equals(end)){
 			return;
 		}
@@ -424,7 +515,32 @@ public class FlowPath {
 		
 		while(!queue.isEmpty()){
 			cur = queue.poll();
-			rs.add(cur);
+			if(cur == end)
+				continue;
+			if(cur.branches() && g.getSuccsOf(cur).size()>=2){
+				boolean hit = false;
+				boolean miss = false;
+				for(Unit u : g.getSuccsOf(cur)){
+					int subrs = hitStmt((Stmt)u, end, g, new HashSet<Stmt>());
+					if(subrs == 0){
+						hit = true;
+						miss = true;
+						break;
+					}
+					else if(subrs == 1)
+						hit = true;
+					else
+						miss = true;
+					
+					if(hit && miss) break;
+				}
+//				if(hit && miss)
+//					rs.add(cur);	
+				//TODO: now we add all predicates.
+				//how to determine if a predicate have nothing to do with the sink?
+				rs.add(cur);
+			}
+			
 			for(Unit u : g.getSuccsOf(cur)){
 				Stmt s = (Stmt)u;
 				if(visited.contains(s)) continue;
@@ -450,10 +566,24 @@ public class FlowPath {
 		this.id = id;
 	}
 	
+	//this method is used to differentiate each flow.
+	public String getSignature(){
+		try{
+			return buildStmtSignature(source.getSource(), icfg) + "=>" +
+					buildStmtSignature(sink.getSink(), icfg);
+		}
+		catch(Exception e){
+			return source.getSource() +"=>" +sink.getSink();
+		}
+	}
+	//this method is used to 
 	public String getTag(){
 		//TODO: could trigger exception because getInvokeExpr returns null.
 		try{
-			return source.getSource().getInvokeExpr().getMethod().getName()+" => "+sink.getSink().getInvokeExpr().getMethod().getName();
+			SootMethod sourceMethod =  source.getSource().getInvokeExpr().getMethod();
+			SootMethod sinkMethod = sink.getSink().getInvokeExpr().getMethod();
+			return sourceMethod.getName()+"@"+sourceMethod.getDeclaringClass().getName()+" => "+
+					sinkMethod.getName()+"@"+sinkMethod.getDeclaringClass().getName();
 		}
 		catch(Exception e){
 			return source.getSource()+" => "+sink.getSink();
