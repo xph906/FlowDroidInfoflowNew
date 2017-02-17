@@ -31,7 +31,8 @@ public class GraphTool {
 	static String outputFolder = "/tmp/";
 	//static String outputFolder = "/Users/xpan/Documents/projects/dataflow-project/output/";
 	static public void displayGraph(UnitGraph g, SootMethod m){
-		displayGraph(g, m.getSignature(), g.getHeads(), false);
+		String name = m.getName()+"-"+m.getDeclaringClass().getName();
+		displayGraph(g, name, g.getHeads(), false);
 	}
 	static public void setOutputFolder(String dir){
 		outputFolder = dir;

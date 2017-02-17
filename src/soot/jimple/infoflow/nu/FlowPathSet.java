@@ -590,7 +590,7 @@ public class FlowPathSet {
 		return preferenceKey2ViewIDMap;
 	}
 
-	public List<Integer> findFlowPath(Stmt s, IInfoflowCFG icfg){
+	public List<Integer> findFlowPath(Stmt s, InterproceduralCFG<Unit, SootMethod> icfg){
 		 List<Integer> rs = new ArrayList<Integer>();
 		 for(int i=0; i<lst.size(); i++){
 			 FlowPath fp = lst.get(i);

@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import heros.InterproceduralCFG;
 import soot.Scene;
 import soot.SootMethod;
 import soot.Unit;
@@ -238,11 +239,11 @@ public class FlowPath {
 		return declaringClassSet;
 	}
 
-	public Stmt findStmtFromFlowPath(Stmt s, IInfoflowCFG newIcfg){
+	public Stmt findStmtFromFlowPath(Stmt s, InterproceduralCFG<Unit, SootMethod> newIcfg){
 		return pathStmtMap.get(buildStmtSignature(s, newIcfg));
 	}
 	
-	private String buildStmtSignature(Stmt s, IInfoflowCFG newIcfg){
+	private String buildStmtSignature(Stmt s, InterproceduralCFG<Unit, SootMethod> newIcfg){
 		if(newIcfg == null)
 			return s.toString()+"@null";
 		
@@ -320,6 +321,7 @@ public class FlowPath {
 //			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
 //			System.out.flush();
 			Stmt cur = path[i];
+			rs.add(cur);
 			Stmt next = path[i+1];
 			SootMethod curMethod = icfg.getMethodOf(cur);
 			SootMethod nextMethod = icfg.getMethodOf(next);
@@ -429,12 +431,13 @@ public class FlowPath {
 	}
 	
 	private void addStmtToList(List<Stmt> lst, Stmt stmt){
-//		if(stmt instanceof IdentityStmt || stmt instanceof BreakpointStmt ||
-//				stmt instanceof MonitorStmt || stmt instanceof RetStmt || 
-//				stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt)
-//			return ;	
-//		
-		if(!stmt.branches()) return ;
+		if( stmt instanceof BreakpointStmt ||
+				stmt instanceof MonitorStmt || stmt instanceof RetStmt || 
+				stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt)
+			return ;	
+		
+//		if(!stmt.branches()) return ;
+		
 		for(Stmt s : lst)
 			if(s == stmt)
 				return ;
@@ -506,6 +509,7 @@ public class FlowPath {
 	private void addStmtIntraProcedureHelper(UnitGraph g, Stmt cur, Stmt end, Set<Stmt> rs){
 		//System.out.println("addStmtIntraProcedureHelper:"+" "+cur+" =>"+end+" "+g.hashCode());
 		if(cur.equals(end)){
+			rs.add(cur);
 			return;
 		}
 		Set<Stmt> visited = new HashSet<Stmt>();
@@ -540,7 +544,8 @@ public class FlowPath {
 				//how to determine if a predicate have nothing to do with the sink?
 				rs.add(cur);
 			}
-			
+			//TODO: remove this line.
+			rs.add(cur);
 			for(Unit u : g.getSuccsOf(cur)){
 				Stmt s = (Stmt)u;
 				if(visited.contains(s)) continue;
@@ -551,7 +556,7 @@ public class FlowPath {
 	}
 	
 	public ResultSinkInfo getSink() {
-		return sink;
+		return sink;	
 	}
 
 	public ResultSourceInfo getSource() {

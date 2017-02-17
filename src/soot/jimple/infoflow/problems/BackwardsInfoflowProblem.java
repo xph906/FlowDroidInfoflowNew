@@ -80,10 +80,11 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 		fSolver = forwardSolver;
 	}
 	
-	private void taintFlow(Unit src, Abstraction source, String msg){
+	private void taintFlow(Unit src, Unit dst, Abstraction source, String msg){
 //		System.out.println("BackwardTaintFlow:"+msg);
 //		System.out.println("  SRC:"+src);
-//		System.out.println("  ABS:"+source+"\n");
+//		System.out.println("  DST:"+dst);
+//		System.out.println("  ABS:"+source.getAccessPath()+"\n");
 	}
 	
 	@Override
@@ -407,7 +408,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							if (source == getZeroValue())
 								return Collections.emptySet();
 							assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
-							taintFlow(src, source, "NormalFlow");
+							taintFlow(src, dest, source, "NormalFlow");
 //							System.out.println("NormalFlow: "+src+" @"+interproceduralCFG().getMethodOf(src));
 //							System.out.println("     dst  : "+dest);
 //							System.out.println("     ABS  : "+source+"\n");
@@ -424,7 +425,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							
 							if(res!=null && res.size()>0){
 								for(Abstraction abs : res)
-									taintFlow(src, abs, "NormalFlow2");
+									taintFlow(src, dest, abs, "NormalFlow2");
 							}
 							
 							return notifyOutFlowHandlers(src, d1, source, res,
@@ -472,7 +473,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 //						System.out.println("CallFlow: "+src);
 //						System.out.println("     dst: "+dest);
 //						System.out.println("     ABS: "+source);
-						taintFlow(src, source, "CallFlow");
+						taintFlow(src, null, source, "CallFlow");
 						
 						// Notify the handler if we have one
 						if (taintPropagationHandler != null)
@@ -591,7 +592,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						
 						if(res!=null && res.size()>0){
 							for(Abstraction abs : res)
-								taintFlow(src, abs, "CallFlow2");
+								taintFlow(src, null, abs, "CallFlow2");
 						}
 						
 						return notifyOutFlowHandlers(src, d1, source, res,
@@ -629,7 +630,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 							return Collections.emptySet();
 						assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
 						
-						taintFlow(callSite, source, "RetFlow");
+						taintFlow(callSite, null, source, "RetFlow");
 						
 						// If we have no caller, we have nowhere to propagate. This
 						// can happen when leaving the main method.
@@ -738,7 +739,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						
 						if(res!=null && res.size()>0){
 							for(Abstraction abs : res)
-								taintFlow(callSite, abs, "RetFlow2");
+								taintFlow(callSite, null, abs, "RetFlow2");
 						}
 						
 						return notifyOutFlowHandlers(exitStmt, d1, source, res,
@@ -767,7 +768,7 @@ public class BackwardsInfoflowProblem extends AbstractInfoflowProblem {
 						if (source == getZeroValue())
 							return Collections.emptySet();
 						assert source.isAbstractionActive() || manager.getConfig().getFlowSensitiveAliasing();
-						taintFlow(call, source, "CallToReturn");
+						taintFlow(call, returnSite, source, "CallToReturn");
 						// Notify the handler if we have one
 						if (taintPropagationHandler != null)
 							taintPropagationHandler.notifyFlowIn(call, source, interproceduralCFG(),

@@ -277,25 +277,6 @@ public class Infoflow extends AbstractInfoflow {
         		config.getEnableExceptionTracking());
         FlowPathSet.setCFG(iCfg);
         
-        //=========================
-        //AccessPathBasedSourceSinkManager manager = (AccessPathBasedSourceSinkManager)sourcesSinks;
-//        for (QueueReader<MethodOrMethodContext> rdr =
-//				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
-//			SootMethod m = rdr.next().method();
-//			if(!m.hasActiveBody()) continue;
-//			
-//			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
-//		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
-//		    int cnt = 0;
-//		    for (Unit u : orderer.newList(g, false)) {
-//		    	SourceInfo si = sourcesSinks.getSourceInfo((Stmt)u, iCfg);
-//		    	if(sourcesSinks.getSourceInfo((Stmt)u, iCfg) != null){
-//		    		System.out.println("ABC: SOURCE: "+u+" :");
-//		    	}
-//		    }
-//		}
-        //=========================
-        
         int numThreads = Runtime.getRuntime().availableProcessors();
 		CountingThreadPoolExecutor executor = createExecutor(numThreads);
 
