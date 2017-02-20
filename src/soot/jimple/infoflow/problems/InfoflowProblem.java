@@ -142,18 +142,18 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 			//if current stmt is in the path of one flow
 			//we check if it can be tainted by source
 			SootMethod sm = interproceduralCFG().getMethodOf(src);
-			if(src.toString().contains("setOnClickEventForButton") &&sm.getName().contains("onCreate")){
-				System.out.println("WWWW:"+src);
-				System.out.println("  "+source.getAccessPath());
-			}
-			if(sm.getName().contains("setOnClickEventForButton")){
-				System.out.println("WWWW2:"+src);
-				System.out.println("  "+source.getAccessPath());
-			}
-			if(sm.getName().contains("onClick") && sm.getDeclaringClass().getName().contains("NearbyATM")){
-				System.out.println("WWWW3:"+src);
-				System.out.println("  "+source.getAccessPath());
-			}
+//			if(src.toString().contains("setOnClickEventForButton") &&sm.getName().contains("onCreate")){
+//				System.out.println("WWWW:"+src);
+//				System.out.println("  "+source.getAccessPath());
+//			}
+//			if(sm.getName().contains("setOnClickEventForButton")){
+//				System.out.println("WWWW2:"+src);
+//				System.out.println("  "+source.getAccessPath());
+//			}
+//			if(sm.getName().contains("onClick") && sm.getDeclaringClass().getName().contains("NearbyATM")){
+//				System.out.println("WWWW3:"+src);
+//				System.out.println("  "+source.getAccessPath());
+//			}
 			
 			if(lfp.size() > 0 ){
 				Stmt stmt = (Stmt)src;
@@ -167,55 +167,52 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 //					isDebug = true;
 //				}
 				List<ValueBox> lvb = null;
-				Abstraction next = source;
-				while(next != null && !doTaint){
-					source = next;
-//					System.out.println(" ACCESSPATH:"+source.getAccessPath());
-//					System.out.println("       STMT:"+stmt);
-					next = next.getPredecessor();
-					lvb = stmt.getUseBoxes();
-					for(ValueBox vb : lvb){
-						Value v = vb.getValue();
-	//					if(isDebug){
-	//						System.out.println("  V:"+v+" / "+source.getAccessPath());
-	//					}
-						if(source.getAccessPath().isLocal()){
-							if(v instanceof Local && v.equals(source.getAccessPath().getPlainValue())){
-								System.out.println("DDD:Local equal: "+source.getAccessPath()+ " vs "+src);
+//				System.out.println(" ACCESSPATH:"+source.getAccessPath());
+//				System.out.println("       STMT:"+stmt);
+				
+				lvb = stmt.getUseBoxes();
+				for(ValueBox vb : lvb){
+					Value v = vb.getValue();
+//					if(isDebug){
+//						System.out.println("  V:"+v+" / "+source.getAccessPath());
+//					}
+					if(source.getAccessPath().isLocal()){
+						if(v instanceof Local && v.equals(source.getAccessPath().getPlainValue())){
+//							System.out.println("DDD:Local equal: "+source.getAccessPath()+ " vs "+src);
+							doTaint = true;
+						}
+					}
+					else if(source.getAccessPath().isStaticFieldRef()){
+						if(v instanceof StaticFieldRef){
+							if(((StaticFieldRef)v).getField().equals(source.getAccessPath().getLastField())){
+//								System.out.println("DDD:StaticFieldRef equal: "+source.getAccessPath()+ " vs "+v);
 								doTaint = true;
 							}
 						}
-						else if(source.getAccessPath().isStaticFieldRef()){
-							if(v instanceof StaticFieldRef){
-								if(((StaticFieldRef)v).getField().equals(source.getAccessPath().getLastField())){
-									System.out.println("DDD:StaticFieldRef equal: "+source.getAccessPath()+ " vs "+v);
+					}
+					else if(source.getAccessPath().isInstanceFieldRef()){
+						if(v instanceof InstanceFieldRef){
+							InstanceFieldRef ifr = (InstanceFieldRef)v;
+							if(ifr.getBase().equals(source.getAccessPath().getPlainValue())){
+								if(ifr.getField().equals(source.getAccessPath().getLastField())){
+//								System.out.println("DDD:InstanceFieldRef equal: "+source.getAccessPath()+ " vs "+ifr);
 									doTaint = true;
 								}
-							}
-						}
-						else if(source.getAccessPath().isInstanceFieldRef()){
-							if(v instanceof InstanceFieldRef){
-								InstanceFieldRef ifr = (InstanceFieldRef)v;
-								if(ifr.getBase().equals(source.getAccessPath().getPlainValue())){
-									if(ifr.getField().equals(source.getAccessPath().getLastField())){
-										System.out.println("DDD:InstanceFieldRef equal: "+source.getAccessPath()+ " vs "+ifr);
-										doTaint = true;
-									}
-									else{
-										//System.out.println("DDD:InstanceFieldRef NOT equal: "+source.getAccessPath()+ " vs "+ifr);
-									}
-								}
-								else if(ifr.getField().equals(source.getAccessPath().getLastField())){
-									System.out.println("DDD:InstanceFieldRef equa2l: "+source.getAccessPath()+ " vs "+ifr);
-									doTaint = true;
+								else{
+									//System.out.println("DDD:InstanceFieldRef NOT equal: "+source.getAccessPath()+ " vs "+ifr);
 								}
 							}
+							else if(ifr.getField().equals(source.getAccessPath().getLastField())){
+//								System.out.println("DDD:InstanceFieldRef equa2l: "+source.getAccessPath()+ " vs "+ifr);
+								doTaint = true;
+							}
 						}
-						else{
-							System.out.println("NULIST: Unknown type accesspath: "+source.getAccessPath()+" "+v.getClass());
-						}
-					}//for
-				}
+					}
+					else{
+//						System.out.println("NULIST: Unknown type accesspath: "+source.getAccessPath()+" "+v.getClass());
+					}
+				}//for
+
 			}
 
 			//taint and correlate view and flow
@@ -234,7 +231,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				}
 				if(intVal != null){
 					for(int flowId : lfp)
-						fps.addViewFlowMapping(flowId, intVal);
+						fps.addViewFlowMapping(flowId, intVal);	
 				}
 				
 				//for Preference

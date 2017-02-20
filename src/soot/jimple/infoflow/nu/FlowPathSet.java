@@ -677,7 +677,7 @@ public class FlowPathSet {
 		    				Value v = s.getInvokeExpr().getArg(0);
 		    				//TODO: handle when arg is not CONSTANT
 		    				if(v instanceof Constant){
-		    					System.out.println("DEBUG7: "+s);
+		    					//System.out.println("DEBUG7: "+s);
 		    					Integer id = Integer.valueOf(((Constant)v).toString());
 		    					String key = m.getDeclaringClass().getName();
 		    					if(activityLayoutMap.containsKey(key)){

@@ -1,6 +1,7 @@
 package soot.jimple.infoflow.nu;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -73,18 +74,29 @@ public class FlowPath {
 		this.allTrigerMethodSet = new HashSet<String>();
 		fullPath = new ArrayList<Stmt>();
 		this.path = this.source.getPath();
+		
+		fullPath.add(source.getSource());
+		//triggers
 		List<Stmt> triggers = findFlowTrigger();
-		if(triggers.size() > 0){
-			System.out.println("  Displaying triggers:"+triggers.size());
-			for(Stmt stmt : triggers){
-				//TODO: change the key to stmt
-				pathStmtMap.put(buildStmtSignature(stmt, icfg), stmt);
-				fullPath.add(stmt);
-				System.out.println("    "+stmt);
-			}
+		System.out.println("  Displaying triggers:"+triggers.size());
+		for(Stmt stmt : triggers){
+			fullPath.add(stmt);
+			System.out.println("    "+stmt);
 		}
-		buildFlowFullPath(source.getPath());
-		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink());
+		//predicates
+		List<Stmt> predicates = buildFlowFullPath(source.getPath());
+		System.out.println("  Displaying predicates:"+triggers.size());
+		for(Stmt stmt : predicates){
+			fullPath.add(stmt);
+			System.out.println("    "+stmt+" @"+icfg.getMethodOf(stmt).getName());
+		}
+		fullPath.add(sink.getSink());
+		
+		for(Stmt s : fullPath){
+			pathStmtMap.put(buildStmtSignature(s, icfg), s);
+			//System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
+		}
+		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink()+"\n");
 		
 //		if(declaringClassSet.size() == 0 && source.getPath()!=null && source.getPath().length>0){
 //			System.err.println("Alert an declaring Class because of no class.");
@@ -111,19 +123,29 @@ public class FlowPath {
 		for(Stmt stmt : sinkFP.path)
 			this.path[i++] = stmt;
 		
+		System.out.println("Start FlowPath2: "+sourceFP.source.getSource()+"=>"+sinkFP.sink.getSink());
+		fullPath.add(sourceFP.source.getSource());
 		List<Stmt> triggers = findFlowTrigger();
 		if(triggers.size() > 0){
 			System.out.println("  Displaying triggers:"+triggers.size());
 			for(Stmt stmt : triggers){
-				//TODO: change the key to stmt
-				pathStmtMap.put(buildStmtSignature(stmt, icfg), stmt);
 				fullPath.add(stmt);
 				System.out.println("    "+stmt);
 			}
 		}
-		buildFlowFullPath(this.path);
-		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink());
-		
+		//predicates
+		List<Stmt> predicates = buildFlowFullPath(this.path);
+		System.out.println("  Displaying predicates:"+triggers.size());
+		for(Stmt stmt : predicates){
+			fullPath.add(stmt);
+			System.out.println("    "+stmt+" @"+icfg.getMethodOf(stmt).getName());
+		}
+		fullPath.add(sinkFP.sink.getSink());
+		for(Stmt s : fullPath){
+			pathStmtMap.put(buildStmtSignature(s, icfg), s);
+			//System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
+		}
+		System.out.println("Done FlowPath2: "+source.getSource()+"=>"+sink.getSink()+"\n");
 	}
 	
 	//TODO: no use
@@ -254,46 +276,49 @@ public class FlowPath {
 			return s.toString()+"@"+curMethod.getSignature();
 	}
 	
-	private void buildFlowFullPath_(Stmt[] path){
-		List<Stmt> rs = fullPath;
-		if(path == null) return ;
-//		if(path.length>0 && path[0].toString().contains("double getLongitude()"))
-//			debug = true;
-		System.out.println("  Start building full path:");
-		
-		for(int i=0; i<path.length-1; i++){
-			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
-			System.out.flush();
+	private List<Stmt> buildFlowFullPath(Stmt[] path){
+		List<Stmt> rs = new ArrayList<Stmt>();
+		if(path == null || path.length==0)
+			return rs;
+	
+		for(int i=path.length-1; i>0; i--){
+//			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
+//			System.out.flush();
 			Stmt cur = path[i];
-			Stmt next = path[i+1];
+			addStmtToList(rs, cur);
+			Stmt prev = path[i-1];
 			SootMethod curMethod = icfg.getMethodOf(cur);
-			SootMethod nextMethod = icfg.getMethodOf(next);
+			SootMethod prevMethod = icfg.getMethodOf(prev);
 			
-//			if(debug){
-//				System.out.println("DEBUG6: C "+curMethod.getSignature()+" =>"+cur);
-//				System.out.println("DEBUG6: N "+nextMethod.getSignature()+" =>"+next);
-//				//System.out.println("DEBUG6: --"+curMethod.getSignature().equals(anObject));
-//			}
-			if(curMethod.getSignature().equals(nextMethod.getSignature())){
+			if(curMethod.getSignature().equals(prevMethod.getSignature())){
 				//the two stmts are in the same procedure,
-				//so we need to exttract all stmts between these two
+				//so we need to extract all predicate stmts between these two
 				//this is an intra-procedure analysis
-				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
+				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, prev);
 				for(Stmt stmt : subrs)
 					addStmtToList(rs, stmt);
 			}
 			else {
-				if(cur.containsInvokeExpr()){
-					InvokeExpr ie = cur.getInvokeExpr();
-					if(ie.getMethod().getSignature().equals(nextMethod.getSignature())){
+				if(prev.containsInvokeExpr()){
+					InvokeExpr ie = prev.getInvokeExpr();
+					if(ie.getMethod().getSignature().equals(curMethod.getSignature())){
+//						System.out.println("    EQUAL:"+curMethod.getSignature());
+						//System.out.println("         :"+ie.getMethod().getSignature());
+						
 						//if current stmt is a call stmt and the next stmt is the stmt in called method
-						addStmtToList(rs, cur); //add current function call
-						Set<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
-						for(Stmt stmt : subrs)
+						//addStmtToList(rs, cur); //add current function call
+						Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, null);
+						for(Stmt stmt : subrs){
 							addStmtToList(rs, stmt);
+//							System.out.println("     STMT:"+stmt);
+						}
 					}
-					else 
+					else {
+//						System.out.println("NOT EQUAL:");
+//						System.out.println("         :"+curMethod.getSignature());
+//						System.out.println("         :"+ie.getMethod().getSignature());
 						addStmtToList(rs, cur);
+					}
 				}
 				else {
 					addStmtToList(rs, cur);
@@ -301,16 +326,12 @@ public class FlowPath {
 			}
 		}
 		
-		addStmtToList(rs, path[path.length-1]);
-		System.out.println(" Done building Full Path:  Size:"+rs.size());
-		System.out.flush();
-		for(Stmt s : rs){
-			pathStmtMap.put(buildStmtSignature(s, icfg), s);
-			System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
-		}
+		addStmtToList(rs, path[0]);
+		Collections.reverse(rs);
+		return rs;
 	}
 	
-	private void buildFlowFullPath(Stmt[] path){
+private void buildFlowFullPath__(Stmt[] path){
 		
 		List<Stmt> rs = fullPath;
 		rs.add(source.getSource());
@@ -363,36 +384,6 @@ public class FlowPath {
 		}
 	}
 	
-//	private void addMultipleGroupStmtsToList(List<List<Stmt>> lst, List<List<Stmt>> adds){
-//		if(lst.size() == 0){
-//			for(List<Stmt> la : adds)
-//				lst.add(la);
-//		}
-//		else{
-//			for(List<Stmt> l : lst){
-//				for(List<Stmt> la : adds){
-//					for(Stmt s : la)
-//						addStmtToList(l, s);
-//				}
-//			}
-//		}
-//	}
-//	private void addOneStmtToList(List<List<Stmt>> lst, Stmt stmt){
-//		if(lst.size() == 0){
-//			List<Stmt> tmp = new ArrayList<Stmt>();
-//			tmp.add(stmt);
-//			lst.add(tmp);
-//		}
-//		else{
-//			for(List<Stmt> l : lst){
-//				for(Stmt s : l)
-//					if(s.equals(stmt))
-//						return;
-//				addStmtToList(l, stmt);
-//			}
-//		}
-//	}
-	
 	private boolean isSameStmt(Stmt s1, Stmt s2){
 		boolean rs = false;
 		if(s1.equals(s2))
@@ -436,7 +427,7 @@ public class FlowPath {
 				stmt instanceof ReturnStmt || stmt instanceof ReturnVoidStmt)
 			return ;	
 		
-//		if(!stmt.branches()) return ;
+		if(!stmt.branches()) return ;
 		
 		for(Stmt s : lst)
 			if(s == stmt)
@@ -458,9 +449,9 @@ public class FlowPath {
 		}
 		UnitGraph g = new ExceptionalUnitGraph(method.getActiveBody());
 		//if cur is null, starts from the heads
-		if(cur == null){
+		if(end == null){
 			for(Unit u : g.getHeads())
-				addStmtIntraProcedureHelper(g, (Stmt)u, end, rs);
+				addStmtIntraProcedureHelper(g, cur, (Stmt)u, rs);
 			return rs;
 		}
 		else{
@@ -512,6 +503,7 @@ public class FlowPath {
 			rs.add(cur);
 			return;
 		}
+		//System.out.println("                  :"+cur+" N "+end);
 		Set<Stmt> visited = new HashSet<Stmt>();
 		visited.add(cur);
 		Queue<Stmt> queue = new LinkedList<Stmt>();
@@ -521,32 +513,10 @@ public class FlowPath {
 			cur = queue.poll();
 			if(cur == end)
 				continue;
-			if(cur.branches() && g.getSuccsOf(cur).size()>=2){
-				boolean hit = false;
-				boolean miss = false;
-				for(Unit u : g.getSuccsOf(cur)){
-					int subrs = hitStmt((Stmt)u, end, g, new HashSet<Stmt>());
-					if(subrs == 0){
-						hit = true;
-						miss = true;
-						break;
-					}
-					else if(subrs == 1)
-						hit = true;
-					else
-						miss = true;
-					
-					if(hit && miss) break;
-				}
-//				if(hit && miss)
-//					rs.add(cur);	
-				//TODO: now we add all predicates.
-				//how to determine if a predicate have nothing to do with the sink?
+			if(cur.branches())
 				rs.add(cur);
-			}
-			//TODO: remove this line.
-			rs.add(cur);
-			for(Unit u : g.getSuccsOf(cur)){
+			
+			for(Unit u : g.getPredsOf(cur)){
 				Stmt s = (Stmt)u;
 				if(visited.contains(s)) continue;
 				visited.add(s);
