@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import heros.InterproceduralCFG;
-import nu.NUDisplay;
+//import nu.NUDisplay;
 import soot.Local;
 import soot.MethodOrMethodContext;
 import soot.Scene;
@@ -90,11 +90,11 @@ public class FlowPathSet {
 				GlobalData global = GlobalData.getInstance();
 				Integer id = global.getViewID(stmt, icfg);
 				if(id != null){
-					NUDisplay.debug("getViewIdFromStmt can find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+//					NUDisplay.debug("getViewIdFromStmt can find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
 					return id;
 				}
 				else {
-					NUDisplay.debug("getViewIdFromStmt cannot find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+//					NUDisplay.debug("getViewIdFromStmt cannot find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
 				}
 			}
 		}
@@ -112,10 +112,10 @@ public class FlowPathSet {
 					GlobalData global = GlobalData.getInstance();
 					Integer id = global.getLayoutID(m.getDeclaringClass().getName());
 					if(id == null){
-						NUDisplay.debug("getViewIdFromStmt cannot find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+//						NUDisplay.debug("getViewIdFromStmt cannot find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
 					}
 					else{
-						NUDisplay.debug("getViewIdFromStmt can find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+//						NUDisplay.debug("getViewIdFromStmt can find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
 					}
 					return id;
 				}
@@ -159,10 +159,10 @@ public class FlowPathSet {
 				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
 				if(key == null){
 					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
-					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getPreferenceKey]:"+stmt, icfg.getMethodOf(stmt).getName()+" Of "+cls);
+					//NUDisplay.debug("findLastResStringAssignment cannot resolve key[getPreferenceKey]:"+stmt, icfg.getMethodOf(stmt).getName()+" Of "+cls);
 				}
 				else{
-					NUDisplay.debug("findLastResStringAssignment can resolve key[getPreferenceKey]:"+stmt, null);
+					//NUDisplay.debug("findLastResStringAssignment can resolve key[getPreferenceKey]:"+stmt, null);
 				}
 				return key;
 			}
@@ -197,11 +197,11 @@ public class FlowPathSet {
 				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
 				if(key == null){
 					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
-					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getIntentKey]:"+stmt, 
-							icfg.getMethodOf(stmt).getName()+" Of "+cls);
+//					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getIntentKey]:"+stmt, 
+//							icfg.getMethodOf(stmt).getName()+" Of "+cls);
 				}
 				else{
-					NUDisplay.debug("findLastResStringAssignment can resolve key[getIntentKey]:"+stmt, null);
+//					NUDisplay.debug("findLastResStringAssignment can resolve key[getIntentKey]:"+stmt, null);
 				}
 				return key;
 			}
@@ -236,11 +236,11 @@ public class FlowPathSet {
 				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
 				if(key == null){
 					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
-					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getBundleKey]:"+stmt, 
-							icfg.getMethodOf(stmt).getName()+" Of "+cls);
+//					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getBundleKey]:"+stmt, 
+//							icfg.getMethodOf(stmt).getName()+" Of "+cls);
 				}
 				else{
-					NUDisplay.debug("findLastResStringAssignment can resolve key[getBundleKey]:"+stmt, null);
+//					NUDisplay.debug("findLastResStringAssignment can resolve key[getBundleKey]:"+stmt, null);
 				}
 				return key;				
 			}
