@@ -1,6 +1,7 @@
 package soot.jimple.infoflow.nu;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -10,21 +11,32 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import heros.InterproceduralCFG;
+import nu.NUDisplay;
 import soot.Local;
 import soot.MethodOrMethodContext;
 import soot.Scene;
+import soot.SootField;
 import soot.SootMethod;
 import soot.Unit;
 import soot.Value;
+import soot.jimple.AssignStmt;
+import soot.jimple.CastExpr;
 import soot.jimple.Constant;
+import soot.jimple.FieldRef;
+import soot.jimple.IdentityStmt;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
+import soot.jimple.ParameterRef;
+import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
+import soot.jimple.StringConstant;
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
 import soot.jimple.toolkits.scalar.ConstantPropagatorAndFolder;
+import soot.tagkit.StringConstantValueTag;
+import soot.tagkit.Tag;
 import soot.toolkits.graph.ExceptionalUnitGraph;
 import soot.toolkits.graph.Orderer;
 import soot.toolkits.graph.PseudoTopologicalOrderer;
@@ -32,21 +44,22 @@ import soot.toolkits.graph.UnitGraph;
 import soot.util.queue.QueueReader;
 
 public class FlowPathSet {
-	final String SET_CONTENT_VIEW = "setContentView";
-	final String INTENT_PUT_SIGNATURE_STR = "android.content.Intent: android.content.Intent put";
-	final String BUNDLE_PUT_SIGNATURE_STR = "android.os.Bundle: void put";
-	final String PREFERENCE_PUT_SIGNATURE_STR = "android.content.SharedPreferences$Editor put";
-	final String FIND_VIEW_BY_ID_SIGNATURE_STR = "android.view.View findViewById(int)";
+	static final String SET_CONTENT_VIEW = "setContentView";
+	static final String FIND_VIEW_BY_UD = "findViewById";
+	static final String INTENT_PUT_SIGNATURE_STR = "android.content.Intent: android.content.Intent put";
+	static final String BUNDLE_PUT_SIGNATURE_STR = "android.os.Bundle: void put";
+	static final String PREFERENCE_PUT_SIGNATURE_STR = "android.content.SharedPreferences$Editor put";
+	static final String FIND_VIEW_BY_ID_SIGNATURE_STR = "android.view.View findViewById(int)";
 	
-	final String INTENT_GET_PATTERN = "android\\.content\\.Intent\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
-	final Pattern intentGetPattern = Pattern.compile(INTENT_GET_PATTERN);
+	static final String INTENT_GET_PATTERN = "android\\.content\\.Intent\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	static final Pattern intentGetPattern = Pattern.compile(INTENT_GET_PATTERN);
 	
-	final String BUNDLE_GET_PATTERN = "android\\.os\\.Bundle\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
-	final Pattern bundleGetPattern = Pattern.compile(BUNDLE_GET_PATTERN);
+	static final String BUNDLE_GET_PATTERN = "android\\.os\\.Bundle\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	static final Pattern bundleGetPattern = Pattern.compile(BUNDLE_GET_PATTERN);
 	
 	//android.content.SharedPreferences: boolean getBoolean(java.lang.String,boolean)
-	final String PREFERENCE_GET_PATTERN = "android\\.content\\.SharedPreferences\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
-	final Pattern preferenceGetPattern = Pattern.compile(PREFERENCE_GET_PATTERN);
+	static final String PREFERENCE_GET_PATTERN = "android\\.content\\.SharedPreferences\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	static final Pattern preferenceGetPattern = Pattern.compile(PREFERENCE_GET_PATTERN);
 	//final AccessPathBasedSourceSinkManager 
 	
 	static private IInfoflowCFG icfg ;
@@ -54,15 +67,13 @@ public class FlowPathSet {
 		icfg = cfg;
 	}
 	
-	
-	//TODO: deal with non-constant case.
 	static public Integer getViewIdFromStmt(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
 			return null;
 		InvokeExpr ie = stmt.getInvokeExpr();
 		SootMethod sm = ie.getMethod();
 		//TODO: add setContentView
-		if(sm.getName().equals("findViewById")){
+		if(sm.getName().equals(FIND_VIEW_BY_UD)){
 			//TODO: handle if findViewById is not a constant
 			Value v = ie.getArg(0);
 			if(v instanceof Constant){
@@ -79,16 +90,43 @@ public class FlowPathSet {
 				GlobalData global = GlobalData.getInstance();
 				Integer id = global.getViewID(stmt, icfg);
 				if(id != null){
-					System.out.println("Find ID from Stmt: "+id);
+					NUDisplay.debug("getViewIdFromStmt can find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
 					return id;
 				}
+				else {
+					NUDisplay.debug("getViewIdFromStmt cannot find ViewID[findViewById]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+				}
+			}
+		}
+		else if(sm.getName().equals(SET_CONTENT_VIEW)){
+			try{
+				Value v = stmt.getInvokeExpr().getArg(0);
+				//TODO: handle when arg is not CONSTANT
+				if(v instanceof Constant){
+					//System.out.println("DEBUG7: "+s);
+					Integer id = Integer.valueOf(((Constant)v).toString());
+					return id;
+				}
+				else{
+					SootMethod m = icfg.getMethodOf(stmt);
+					GlobalData global = GlobalData.getInstance();
+					Integer id = global.getLayoutID(m.getDeclaringClass().getName());
+					if(id == null){
+						NUDisplay.debug("getViewIdFromStmt cannot find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+					}
+					else{
+						NUDisplay.debug("getViewIdFromStmt can find ViewID[setContentView]:"+stmt, icfg.getMethodOf(stmt).getSignature());
+					}
+					return id;
+				}
+			}
+			catch(Exception e){
+				System.err.println("NULIST: error: buildEventRegisteryMapAndActivityLayoutMap "+e.toString());
 			}
 		}
 		return null;
 	}
 	
-	//TODO: deal with non-constant case.
-	//Should read data from GlobalData
 	static public String getPreferenceKey(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
 			return null;
@@ -117,14 +155,21 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				System.out.println("NULIST: Cannot find the key for preference:"+stmt);
+//				System.out.println("NULIST: Cannot find the key for preference (not constant):"+stmt);
+				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				if(key == null){
+					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
+					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getPreferenceKey]:"+stmt, icfg.getMethodOf(stmt).getName()+" Of "+cls);
+				}
+				else{
+					NUDisplay.debug("findLastResStringAssignment can resolve key[getPreferenceKey]:"+stmt, null);
+				}
+				return key;
 			}
 		}
 		return null;
 	}
 	
-	//TODO: deal with non-constant case.
-	//Should read data from GlobalData
 	static public String getIntentKey(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
 			return null;
@@ -148,14 +193,22 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				System.out.println("NULIST: Cannot find the key for Intent:"+stmt);
+//				System.out.println("NULIST: Cannot find the key for Intent (not constant):"+stmt);
+				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				if(key == null){
+					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
+					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getIntentKey]:"+stmt, 
+							icfg.getMethodOf(stmt).getName()+" Of "+cls);
+				}
+				else{
+					NUDisplay.debug("findLastResStringAssignment can resolve key[getIntentKey]:"+stmt, null);
+				}
+				return key;
 			}
 		}
 		return null;
 	}
 	
-	//TODO: deal with non-constant case.
-	//Should read data from GlobalData
 	static public String getBundleKey(Stmt stmt){
 		if(stmt==null || !stmt.containsInvokeExpr())
 			return null;
@@ -179,7 +232,17 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				System.out.println("NULIST: Cannot find the key for Bundle:"+stmt);
+//				System.out.println("NULIST: Cannot find the key for Bundle (not constant):"+stmt);
+				String key = findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				if(key == null){
+					String cls = icfg.getMethodOf(stmt).getDeclaringClass().getName();
+					NUDisplay.debug("findLastResStringAssignment cannot resolve key[getBundleKey]:"+stmt, 
+							icfg.getMethodOf(stmt).getName()+" Of "+cls);
+				}
+				else{
+					NUDisplay.debug("findLastResStringAssignment can resolve key[getBundleKey]:"+stmt, null);
+				}
+				return key;				
 			}
 		}
 		return null;
@@ -690,13 +753,11 @@ public class FlowPathSet {
 		    					}
 		    				}
 		    				else{
-		    					GlobalData global = GlobalData.getInstance();
-		    					Integer id = global.getLayoutID(m.getDeclaringClass().getName());
+//		    					GlobalData global = GlobalData.getInstance();
+//		    					Integer id = global.getLayoutID(m.getDeclaringClass().getName());
 		    					String key = m.getDeclaringClass().getName();
-		    					if(id == null)
-		    						System.out.println("NULIST: alert: setContentView's arg is not constant:"+s+" "+m.getDeclaringClass().getName());
-		    					else{
-		    						System.out.println("NULIST: set Special ContnetViewID: "+id+" "+m.getDeclaringClass().getName());
+		    					Integer id = getViewIdFromStmt(s);
+		    					if(id != null){
 		    						if(activityLayoutMap.containsKey(key)){
 			    						activityLayoutMap.get(key).add(id);
 			    					}
@@ -704,7 +765,7 @@ public class FlowPathSet {
 			    						Set<Integer> set = new HashSet<Integer>();
 			    						set.add(id);
 			    						activityLayoutMap.put(key, set);
-			    					}
+			    					}	
 		    					}
 		    				}
 		    			}
@@ -763,5 +824,88 @@ public class FlowPathSet {
 		for(FlowPath fp : lst){
 			System.out.println("Flow:"+fp.getSource()+" => "+fp.getSink());
 		}
+	}
+	
+	private static String findLastResStringAssignment(Stmt stmt, Value target, 
+			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited) {
+		if(visited.contains(stmt)){
+			return null;
+		}
+		visited.add(stmt);
+		
+		if(cfg == null) {
+			System.err.println("Error: findLastResIDAssignment cfg is not set.");
+			return null;
+		}
+		// If this is an assign statement, we need to check whether it changes
+		// the variable we're looking for
+		if (stmt instanceof AssignStmt) {
+			AssignStmt assign = (AssignStmt) stmt;
+			if (assign.getLeftOp() == target) {
+				// ok, now find the new value from the right side
+				if (assign.getRightOp() instanceof StringConstant) {
+					return ((StringConstant) assign.getRightOp()).value;
+				} 
+				else if (assign.getRightOp() instanceof FieldRef) {
+					SootField field = ((FieldRef) assign.getRightOp()).getField();
+					for (Tag tag : field.getTags()){
+						if (tag instanceof StringConstantValueTag){
+							//System.out.println("This is an integerCOnstantValue");
+							return ((StringConstantValueTag) tag).getStringValue();
+						}
+					}
+					if(assign.getRightOp() instanceof StaticFieldRef){
+						StaticFieldRef sfr = (StaticFieldRef)assign.getRightOp();
+						target = assign.getRightOp();
+					}
+				} 
+				else if(assign.getRightOp() instanceof Local){
+					target = assign.getRightOp();
+				}
+				else if(assign.getRightOp() instanceof CastExpr){
+					target = assign.getRightOp();
+				}
+				else if (assign.getRightOp() instanceof InvokeExpr) {
+					System.out.println("NULIST: TODO: findLastResStringAssignment right invoke expr:"+assign.getRightOp());
+					return null;
+				}
+			}
+			
+		}
+		else if(stmt instanceof IdentityStmt){
+			IdentityStmt is = (IdentityStmt)stmt;
+			if(is.getLeftOp() == target){
+				//System.out.println("From IdentityStmt: "+is);
+				if(is.getRightOp() instanceof ParameterRef){
+					ParameterRef right = (ParameterRef)(is.getRightOp());
+					int idx = right.getIndex();
+					Collection<Unit> callers = cfg.getCallersOf(cfg.getMethodOf(stmt));
+					if(callers != null && callers.size()>0){
+						for(Unit caller : callers){
+							InvokeExpr ie = ((Stmt)caller).getInvokeExpr();
+							if(idx >= ie.getArgCount()) continue;
+							Value arg = ie.getArg(idx);
+							if(arg instanceof StringConstant)
+								return ((StringConstant) arg).value;
+							else{
+								String lastAssignment = findLastResStringAssignment((Stmt) caller, arg, cfg, visited);
+								if (lastAssignment != null)
+									return lastAssignment;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Continue the search upwards
+		for (Unit pred : cfg.getPredsOf(stmt)) {
+			if (!(pred instanceof Stmt))
+				continue;
+			String lastAssignment = findLastResStringAssignment((Stmt) pred, target, cfg, visited);
+			if (lastAssignment != null)
+				return lastAssignment;
+		}
+		return null;
 	}
 }
