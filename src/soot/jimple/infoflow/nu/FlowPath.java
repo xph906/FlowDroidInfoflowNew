@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import heros.InterproceduralCFG;
 import soot.Scene;
@@ -56,6 +58,7 @@ public class FlowPath {
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> declaringClassSet = null;
 	private Set<String> allTrigerMethodSet = null;
+	private Pattern callbackMethodNamePatttern = Pattern.compile("^on[A-Z][a-z]");
 	
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Map<String, String> eventListenerMap, Set<String> lifeCycleEventListenerSet,
@@ -148,33 +151,6 @@ public class FlowPath {
 		System.out.println("Done FlowPath2: "+source.getSource()+"=>"+sink.getSink()+"\n");
 	}
 	
-	//TODO: no use
-	private void buildEventListenerMap(){
-		this.eventListenerMap = new HashMap<String, String>();
-		this.eventListenerMap.put("onClick", "setOnClickListener");
-		this.eventListenerMap.put("onLongClick", "setOnLongClickListener");
-		
-		this.eventListenerMap.put("onFocusChange", "setOnFocusChangeListener");
-		this.eventListenerMap.put("onFocusChanged", "setOnFocusChangeListener");
-		
-		this.eventListenerMap.put("onKey", "setOnKeyListener");
-		this.eventListenerMap.put("onKeyDown", "setOnKeyListener");
-		this.eventListenerMap.put("onKeyUp", "setOnKeyListener");
-		
-		this.eventListenerMap.put("onTouchEvent", "setOnTouchListener");
-		this.eventListenerMap.put("onTouch", "setOnTouchListener");
-		
-		this.lifeCycleEventListenerSet = new HashSet<String>();
-		this.lifeCycleEventListenerSet.add("onCreate");
-		this.lifeCycleEventListenerSet.add("onPause");
-		this.lifeCycleEventListenerSet.add("onStart");
-		this.lifeCycleEventListenerSet.add("onResume");
-		this.lifeCycleEventListenerSet.add("onRestart");
-		this.lifeCycleEventListenerSet.add("onStop");
-		this.lifeCycleEventListenerSet.add("onDestroy");
-		
-	}
-	
 	private List<Stmt> findFlowTrigger(){
 		
 		System.out.println("NULIST: Start finding trigger for flow: "+this.source.getSource()+"=>"+sink.getSink());
@@ -201,16 +177,19 @@ public class FlowPath {
 			SootMethod sm = queue.poll();
 			//a regular method could be declared as event handler
 			allTrigerMethodSet.add(sm.getName());
-			if(this.eventListenerMap.containsKey(sm.getName()) ){
+//			if(this.eventListenerMap.containsKey(sm.getName()) ){
+			Matcher mat = callbackMethodNamePatttern.matcher(sm.getName());
+			if(mat.find()){
 				//System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
 				if(lst == null) continue;
 				for(Stmt s : lst){
-//					System.out.println("NULIST DEBUG:  registrymethod: "+s);
+					System.out.println("NULIST DEBUG888:  registrymethod: "+s);
 					rs.add(s);
 				}
 			}
-			else if(this.lifeCycleEventListenerSet.contains(sm.getName())){
+			
+			if(this.lifeCycleEventListenerSet.contains(sm.getName())){
 				//System.out.println("NULIST DEBUG: Found trigger2: "+sm.getSignature());
 				List<Stmt> lst = this.registryMap.get(sm.getSignature());
 				if(lst == null) continue;

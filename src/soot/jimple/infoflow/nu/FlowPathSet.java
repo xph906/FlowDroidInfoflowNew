@@ -1,5 +1,8 @@
 package soot.jimple.infoflow.nu;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -17,6 +20,7 @@ import soot.MethodOrMethodContext;
 import soot.Scene;
 import soot.SootField;
 import soot.SootMethod;
+import soot.Type;
 import soot.Unit;
 import soot.Value;
 import soot.jimple.AssignStmt;
@@ -44,6 +48,7 @@ import soot.toolkits.graph.UnitGraph;
 import soot.util.queue.QueueReader;
 
 public class FlowPathSet {
+	static final String CALLBACK_LIST_FILE_NAME = "../soot-infoflow-android/AndroidCallbacks.txt";
 	static final String SET_CONTENT_VIEW = "setContentView";
 	static final String FIND_VIEW_BY_UD = "findViewById";
 	static final String INTENT_PUT_SIGNATURE_STR = "android.content.Intent: android.content.Intent put";
@@ -257,6 +262,9 @@ public class FlowPathSet {
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> eventRegistryMethodSet = null;
+	
+	private Set<String> callbackListenerSet = null;
+	
 	//activity class name -> set of Layout IDs
 	private Map<String, Set<Integer>> activityLayoutMap; 
 	private Set<String> addedFlowSet;
@@ -276,6 +284,8 @@ public class FlowPathSet {
 	private Map<String, Set<FlowPath>> bundleSourceMap;
 	private Map<String, Set<FlowPath>> preferenceSinkMap;
 	private Map<String, Set<FlowPath>> preferenceSourceMap;
+	
+	
 	
 	
 	public Map<String, Set<Integer>> getIntentKey2ViewIDMap() {
@@ -305,10 +315,36 @@ public class FlowPathSet {
 	public Set<String> getLifeCycleEventListenerSet() {
 		return lifeCycleEventListenerSet;
 	}
-
+	
+	private Set<String> loadAndroidCallBackListeners(){
+		Set<String> androidCallbacks = new HashSet<String>();
+		BufferedReader rdr = null;
+		try {
+			String fileName = CALLBACK_LIST_FILE_NAME;
+			if (!new File(fileName).exists()) {
+				fileName = "../soot-infoflow-android/AndroidCallbacks.txt";
+				if (!new File(fileName).exists())
+					throw new RuntimeException("Callback definition file not found");
+			}
+			rdr = new BufferedReader(new FileReader(fileName));
+			String line;
+			while ((line = rdr.readLine()) != null)
+				if (!line.isEmpty())
+					androidCallbacks.add(line);
+		}
+		catch(Exception e){
+			System.err.println("failed to read callback file");
+			System.exit(1);
+		}
+		
+		return androidCallbacks;
+	}
+	
 	public FlowPathSet(){
 		this.lst = new ArrayList<FlowPath>();
-		
+		this.callbackListenerSet = loadAndroidCallBackListeners();
+//		for(String v : callbackListenerSet)
+//			System.out.println("Listener: "+v);
 
 		this.lifeCycleEventListenerSet = new HashSet<String>();
 		this.eventListenerMap = new HashMap<String, String>();
@@ -687,6 +723,18 @@ public class FlowPathSet {
 		this.eventListenerMap.put("onTouchEvent", "setOnTouchListener");
 		this.eventListenerMap.put("onTouch", "setOnTouchListener");
 		
+		//Alert Dialog
+		this.eventListenerMap.put("onClick", "setPositiveButton");
+		this.eventListenerMap.put("onClick", "setNegativeButton");
+		this.eventListenerMap.put("onClick", "setButton");
+		this.eventListenerMap.put("onClick", "setMultiChoiceItems");
+		this.eventListenerMap.put("onClick", "setNeutralButton");
+		this.eventListenerMap.put("onCancel", "setOnCancelListener");
+		//setOnDismissListener onDismiss
+		//setOnItemSelectedListener onItemSelected onNothingSelected
+		//setSingleChoiceItems  onClick
+		//setOnDateSetListener  onDateSet
+		
 		
 		this.lifeCycleEventListenerSet.add("onCreate");
 		this.lifeCycleEventListenerSet.add("onPause");
@@ -707,25 +755,49 @@ public class FlowPathSet {
 		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
 		    for (Unit u : orderer.newList(g, false)) {
 		    	Stmt s = (Stmt)u;
+		    	//test
 		    	if(s.containsInvokeExpr()){
 		    		InvokeExpr expr = s.getInvokeExpr();
 		    		SootMethod invokedM = expr.getMethod();
-		    		if(eventRegistryMethodSet.contains(invokedM.getName())){
-		    			if(invokedM.getParameterCount() == 1){ //e.g., setOnClickListener
-		    				Value arg = expr.getArg(0); 
-		    				String type = arg.getType().toString();
-		    				//System.out.println("NULIST RC:"+type+" //"+invokedM.getName());
-		    				if(registryMap.containsKey(type))
-		    					registryMap.get(type).add(s);
+		    		for(int i=0; i<invokedM.getParameterCount(); i++){
+		    			Type type = invokedM.getParameterType(i);
+		    			if(callbackListenerSet.contains(type.getEscapedName()) ){
+		    				System.out.println("TTTTT: "+type.getEscapedName()+" - "+expr.getArg(i).getType());
+		    				System.out.println("     : "+s);
+		    				Value arg = expr.getArg(i);
+		    				String argType = arg.getType().toString();
+		    				if(registryMap.containsKey(argType))
+		    					registryMap.get(argType).add(s);
 		    				else{
 		    					List<Stmt> lst = new ArrayList<Stmt>();
 		    					lst.add(s);
-		    					registryMap.put(type, lst);
+		    					registryMap.put(argType, lst);
 		    				}
-		    				System.out.println("DEBUG4:"+type+" -> "+s);
 		    			}
+		    			
 		    		}
-		    		else if(lifeCycleEventListenerSet.contains(invokedM.getName())){
+		    	}
+		    	
+		    	if(s.containsInvokeExpr()){
+		    		InvokeExpr expr = s.getInvokeExpr();
+		    		SootMethod invokedM = expr.getMethod();
+//		    		if(eventRegistryMethodSet.contains(invokedM.getName())){
+//		    			if(invokedM.getParameterCount() == 1){ //e.g., setOnClickListener
+//		    				Value arg = expr.getArg(0); 
+//		    				String type = arg.getType().toString();
+//		    				//System.out.println("NULIST RC:"+type+" //"+invokedM.getName());
+//		    				if(registryMap.containsKey(type))
+//		    					registryMap.get(type).add(s);
+//		    				else{
+//		    					List<Stmt> lst = new ArrayList<Stmt>();
+//		    					lst.add(s);
+//		    					registryMap.put(type, lst);
+//		    				}
+//		    				System.out.println("DEBUG4:"+type+" -> "+s);
+//		    			}
+//		    		}
+		    			
+		    		if(lifeCycleEventListenerSet.contains(invokedM.getName())){
 		    			String sig = invokedM.getSignature();
 		    			if(registryMap.containsKey(sig))
 	    					registryMap.get(sig).add(s);
@@ -780,9 +852,16 @@ public class FlowPathSet {
 		for(String cls : activityLayoutMap.keySet()){
 			Set<Integer> set = activityLayoutMap.get(cls);
 			for(Integer id : set){
-				System.out.println("Display LAYOUT:"+cls+" => "+id);
+				System.out.println("Display LAYOUT MAP:"+cls+" => "+id);
 			}
 		}
+		for(String listenerClsName : registryMap.keySet()){
+			List<Stmt> list = registryMap.get(listenerClsName);
+			for(Stmt stmt : list){
+				System.out.println("Display Registry Map:"+listenerClsName+" => "+stmt);
+			}
+		}
+		
 	}
 	
 	public Map<String, Set<Integer>> getActivityLayoutMap() {
