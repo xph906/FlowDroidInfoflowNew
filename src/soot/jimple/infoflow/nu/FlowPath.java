@@ -177,26 +177,23 @@ public class FlowPath {
 			SootMethod sm = queue.poll();
 			//a regular method could be declared as event handler
 			allTrigerMethodSet.add(sm.getName());
-//			if(this.eventListenerMap.containsKey(sm.getName()) ){
 			Matcher mat = callbackMethodNamePatttern.matcher(sm.getName());
-			if(mat.find()){
+			if(!this.lifeCycleEventListenerSet.contains(sm.getName()) && mat.find()){
 				//System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
-				if(lst == null) continue;
-				for(Stmt s : lst){
-					System.out.println("NULIST DEBUG888:  registrymethod: "+s);
-					rs.add(s);
+				if(lst != null){
+					for(Stmt s : lst){
+						System.out.println("NULIST DEBUG888: "+sm.getName()+" => "+s);
+						rs.add(s);
+					}
 				}
 			}
-			
-			if(this.lifeCycleEventListenerSet.contains(sm.getName())){
+			else if(this.lifeCycleEventListenerSet.contains(sm.getName())){
 				//System.out.println("NULIST DEBUG: Found trigger2: "+sm.getSignature());
 				List<Stmt> lst = this.registryMap.get(sm.getSignature());
 				if(lst == null) continue;
-				for(Stmt s : lst){
-//					System.out.println("NULIST DEBUG:  registrymethod: "+s);
+				for(Stmt s : lst)
 					rsLifeCycle.add(s);
-				}
 				declaringClassSet.add(sm.getDeclaringClass().getName());
 			}
 			else{

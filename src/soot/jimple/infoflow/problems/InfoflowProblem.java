@@ -42,6 +42,7 @@ import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.InstanceOfExpr;
 import soot.jimple.InvokeExpr;
 import soot.jimple.NewArrayExpr;
+import soot.jimple.NewExpr;
 import soot.jimple.ReturnStmt;
 import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
@@ -217,9 +218,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 			//taint and correlate view and flow
 			if(doTaint){
-				//for findViewById
+				//for findViewById or New Widget
 				Abstraction taintSource = source;
 				Integer intVal = null;
+				Stmt initStmt = null;
 				while(taintSource!=null){	
 					//System.out.println("  TaintSrc:"+taintSource.getCurrentStmt()+" ||");
 					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
@@ -227,11 +229,24 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 						//System.out.println("  SRC INT:"+taintSource.getCurrentStmt());
 						break;
 					}
+					else{
+						if(taintSource.getCurrentStmt() instanceof DefinitionStmt){
+							DefinitionStmt ds = (DefinitionStmt)taintSource.getCurrentStmt();
+							if(ds.getRightOp() instanceof NewExpr){
+								initStmt = taintSource.getCurrentStmt();
+								break;
+							}
+						}
+					}
 					taintSource = taintSource.getPredecessor();
 				}
 				if(intVal != null){
 					for(int flowId : lfp)
 						fps.addViewFlowMapping(flowId, intVal);	
+				}
+				else if(initStmt != null){
+					for(int flowId : lfp)
+						fps.addViewFlowMapping(flowId, initStmt);
 				}
 				
 				//for Preference

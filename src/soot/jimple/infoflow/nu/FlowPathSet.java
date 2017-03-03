@@ -258,6 +258,10 @@ public class FlowPathSet {
 	/* Key: the FlowPath's id
 	 * Value: a list of View Id associated with this flow. */
 	private Map<Integer, Set<Integer>> viewFlowMap;
+	/* Key: the FlowPath's id
+	 * Value: a list of View's creation stmt associated with this flow. 
+	 *        Used for views created programmatically*/
+	private Map<Integer, Set<Stmt>> viewStmtFlowMap;
 	private Map<String, String> eventListenerMap = null;
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
@@ -364,6 +368,7 @@ public class FlowPathSet {
 		
 		buildEventRegisteryMapAndActivityLayoutMap();
 		viewFlowMap = new HashMap<Integer, Set<Integer>>();
+		viewStmtFlowMap = new HashMap<Integer, Set<Stmt>>();
 		preferenceValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
 		preferenceKey2ViewIDMap = new HashMap<String, Set<Integer>>();
 		
@@ -871,6 +876,9 @@ public class FlowPathSet {
 	public Map<Integer, Set<Integer>> getViewFlowMap() {
 		return viewFlowMap;
 	}
+	public Map<Integer, Set<Stmt>> getViewStmtFlowMap(){
+		return viewStmtFlowMap;
+	}
 	
 	//This method is called
 	public void updateXMLEventListener(Map<String, Set<Integer>> xmlEventHandler2ViewIds){
@@ -895,6 +903,16 @@ public class FlowPathSet {
 			Set<Integer> viewids = new HashSet<Integer>();
 			viewFlowMap.put(flowId, viewids);
 			viewids.add(viewId);
+		}
+	}
+	public void addViewFlowMapping(int flowId, Stmt viewStmt){
+		if(viewStmtFlowMap.containsKey(flowId)){
+			viewStmtFlowMap.get(flowId).add(viewStmt);
+		}
+		else{
+			Set<Stmt> viewstmts = new HashSet<Stmt>();
+			viewStmtFlowMap.put(flowId, viewstmts);
+			viewstmts.add(viewStmt);
 		}
 	}
 	
