@@ -307,59 +307,7 @@ public class FlowPath {
 		return rs;
 	}
 	
-private void buildFlowFullPath__(Stmt[] path){
-		
-		List<Stmt> rs = fullPath;
-		rs.add(source.getSource());
-		if(path == null) return ;
-//		System.out.println("  Start building full path:");
-		
-		for(int i=0; i<path.length-1; i++){
-//			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
-//			System.out.flush();
-			Stmt cur = path[i];
-			rs.add(cur);
-			Stmt next = path[i+1];
-			SootMethod curMethod = icfg.getMethodOf(cur);
-			SootMethod nextMethod = icfg.getMethodOf(next);
-			
-			if(curMethod.getSignature().equals(nextMethod.getSignature())){
-				//the two stmts are in the same procedure,
-				//so we need to extract all predicate stmts between these two
-				//this is an intra-procedure analysis
-				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, next);
-				for(Stmt stmt : subrs)
-					addStmtToList(rs, stmt);
-			}
-			else {
-				if(cur.containsInvokeExpr()){
-					InvokeExpr ie = cur.getInvokeExpr();
-					if(ie.getMethod().getSignature().equals(nextMethod.getSignature())){
-						//if current stmt is a call stmt and the next stmt is the stmt in called method
-						addStmtToList(rs, cur); //add current function call
-						Set<Stmt> subrs = addStmtIntraProcedure(nextMethod, null, next);
-						for(Stmt stmt : subrs)
-							addStmtToList(rs, stmt);
-					}
-					else 
-						addStmtToList(rs, cur);
-				}
-				else {
-					addStmtToList(rs, cur);
-				}
-			}
-		}
-		
-		addStmtToList(rs, path[path.length-1]);
-		rs.add(sink.getSink());
-		System.out.println(" Done building Full Path:  Size:"+rs.size());
-		System.out.flush();
-		for(Stmt s : rs){
-			pathStmtMap.put(buildStmtSignature(s, icfg), s);
-			System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
-		}
-	}
-	
+
 	private boolean isSameStmt(Stmt s1, Stmt s2){
 		boolean rs = false;
 		if(s1.equals(s2))
