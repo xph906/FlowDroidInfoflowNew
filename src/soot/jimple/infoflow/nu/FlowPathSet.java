@@ -37,6 +37,8 @@ import soot.jimple.InvokeExpr;
 import soot.jimple.NewExpr;
 import soot.jimple.ParameterRef;
 import soot.jimple.Ref;
+import soot.jimple.RetStmt;
+import soot.jimple.ReturnStmt;
 import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
@@ -770,6 +772,17 @@ public class FlowPathSet {
 			if(!m.hasActiveBody())
 				continue;
 			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
+//			UnitGraph g1 = new ExceptionalUnitGraph(m.getActiveBody());
+//			if(g.getHeads().size() > 0){
+//				Set<Unit> tmp = new HashSet<Unit>();
+//				tmp.add(g.getHeads().get(0));
+//				if(tmp.contains(g1.getHeads().get(0)) ){
+//					System.out.println("YES!!");
+//				}
+//				else {
+//					System.out.println("NONO!!"+g.getHeads().get(0)+" VS "+g1.getHeads().get(0));
+//				}
+//			}
 		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
 		    for (Unit u : orderer.newList(g, false)) {
 		    	Stmt stmt = (Stmt)u;
@@ -1024,8 +1037,8 @@ public class FlowPathSet {
 		if(stmt instanceof AssignStmt){
 			AssignStmt as = (AssignStmt)stmt;
 			if(sameValue(as.getLeftOp(),target) ){
-				System.out.println("   AssignStmt sameValue: T"+target+" AS:" +as);
-				System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
+//				System.out.println("   AssignStmt sameValue: T"+target+" AS:" +as);
+//				System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
 				findViewDefStmtHelper(as, target, bases, cfg, visited, rs);
 				return ;
 			}
@@ -1036,8 +1049,8 @@ public class FlowPathSet {
 				//check if left op points to the target
 				Value left = as.getLeftOp();
 				if(pointToSameValue(left, target, bases)){
-					System.out.println("   AssignStmt pointToSameValue: T:"+target+" AS:" +as);
-					System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
+//					System.out.println("   AssignStmt pointToSameValue: T:"+target+" AS:" +as);
+//					System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
 					findViewDefStmtHelper(as, target, bases, cfg, visited, rs);	
 					return ;
 				}
@@ -1048,12 +1061,78 @@ public class FlowPathSet {
 					List<NUAccessPath> lst= NUAccessPath.findAccessPathWithPrefix(bases, left);
 					for(NUAccessPath ap : lst){
 						ap.replacePrefix(left, as.getRightOp());
-						System.out.println("   AssignStmt prefix: T:"+target+" AccessPath:" +ap+" AS:"+as);
-						System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
+//						System.out.println("   AssignStmt prefix: T:"+target+" AccessPath:" +ap+" AS:"+as);
+//						System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
 					}
 				}
 				else if(NUAccessPath.containsAccessPathWithPrefix(bases, left)){
-					//TODO: what if the right op is a method call.
+					List<NUAccessPath> lst= NUAccessPath.findAccessPathWithPrefix(bases, left);
+					//====process called method============
+					//TODO: HAVE NOT TESTED!!!
+					InvokeExpr ie = stmt.getInvokeExpr();
+					SootMethod sm = ie.getMethod();
+					if(sm.hasActiveBody()){
+						UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+						List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+						//if needs to replace base with $r0
+						if(ie instanceof InstanceInvokeExpr){ 
+							Value base = ((InstanceInvokeExpr) ie).getBase();
+							List<NUAccessPath> tmp = NUAccessPath.findAccessPathWithPrefix(bases, base);
+							if(tmp!=null && tmp.size()>0){
+								Local thisVar = null;
+								Iterator<Unit> it = g.iterator();
+								try{
+									while(it.hasNext()){
+										Stmt s = (Stmt)it.next();
+										if(s instanceof IdentityStmt && ((IdentityStmt) s).getRightOp() instanceof ThisRef){
+											thisVar = (Local)((IdentityStmt) s).getLeftOp();
+											break;
+										}
+									}
+								}
+								catch(Exception e){}
+								
+								if(thisVar != null){
+									for(NUAccessPath ap : tmp){
+										NUAccessPath newAP = new NUAccessPath(ap);
+										newAP.replacePrefix(base, thisVar);
+										newBases.add(newAP);
+									}
+								}
+							}
+						}
+						
+						for(Unit u : g.getTails()){
+							List<NUAccessPath> newBases2 = new ArrayList<NUAccessPath>();
+							newBases2.addAll(newBases);
+							if(u instanceof ReturnStmt){
+								//replace left with return value
+								for(NUAccessPath ap : lst){
+									NUAccessPath newAP = new NUAccessPath(ap);
+									newAP.replacePrefix(left, ((ReturnStmt) u).getOp());
+									newBases2.add(newAP);
+								}
+								//System.out.println("YYYYYY:"+((ReturnStmt) u).getOp()+"  "+u);
+								Set<Stmt> newVisited = null;
+								if(g.getTails().size() == 1)
+									newVisited = visited;
+								else{
+									newVisited = new HashSet<Stmt>();
+									newVisited.addAll(visited);
+								}
+								findViewDefStmt((Stmt)u, target, newBases2, cfg, newVisited, rs);
+							}
+							else{
+								System.out.println("Error: findViewDefStmtHelper"+u.getClass()+"  "+u);
+							}
+						}
+					}// sm.hasActiveBody
+					//=====================================
+					
+					for(NUAccessPath ap : lst)
+						bases.remove(ap);
+					if(bases == null)
+						return ;
 				}
 			}
 		}
@@ -1063,8 +1142,8 @@ public class FlowPathSet {
 			if(pointToSameValue( is.getLeftOp(),target, bases) || 
 				(target instanceof InstanceFieldRef && NUAccessPath.containsAccessPathWithPrefix(
 							bases, ((IdentityStmt) stmt).getLeftOp()))){
-				System.out.println("   IdentityStmt pointToSameValue: "+target+" IS:"+is);
-				System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
+//				System.out.println("   IdentityStmt pointToSameValue: "+target+" IS:"+is);
+//				System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
 				if(is.getRightOp() instanceof ParameterRef){
 					ParameterRef right = (ParameterRef)(is.getRightOp());
 					Value left = ((IdentityStmt) stmt).getLeftOp();
@@ -1075,13 +1154,20 @@ public class FlowPathSet {
 							InvokeExpr ie = ((Stmt)caller).getInvokeExpr();
 							if(idx >= ie.getArgCount()) continue;
 							Value arg = ie.getArg(idx);
+							Set<Stmt> newVisited = null;
+							if(callers.size() == 1)
+								newVisited = visited;
+							else{
+								newVisited = new HashSet<Stmt>();
+								newVisited.addAll(visited);
+							}
 							if(pointToSameValue(left, target, bases)){
 								List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
 								if(arg instanceof InstanceFieldRef)
 									newBases.add(new NUAccessPath(((InstanceFieldRef) arg).getBase()));
-								System.out.println("   Caller 1:"+caller+"@"+cfg.getMethodOf(caller).getSignature());
-								System.out.println("   NAP: "+NUAccessPath.listAPToString(newBases));
-								findViewDefStmt((Stmt) caller, arg, newBases, cfg, visited, rs);
+//								System.out.println("   Caller 1:"+caller+"@"+cfg.getMethodOf(caller).getSignature());
+//								System.out.println("   NAP: "+NUAccessPath.listAPToString(newBases));
+								findViewDefStmt((Stmt) caller, arg, newBases, cfg, newVisited, rs);
 							}
 							else{
 								List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
@@ -1093,12 +1179,10 @@ public class FlowPathSet {
 								}
 								if(arg instanceof InstanceFieldRef)
 									NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) arg).getBase());
-								System.out.println("   Caller 2:"+caller+"@"+cfg.getMethodOf(caller).getSignature());
-								System.out.println("   NAP: "+NUAccessPath.listAPToString(newBases));
-								findViewDefStmt((Stmt) caller, target, newBases, cfg, visited, rs);
+//								System.out.println("   Caller 2:"+caller+"@"+cfg.getMethodOf(caller).getSignature());
+//								System.out.println("   NAP: "+NUAccessPath.listAPToString(newBases));
+								findViewDefStmt((Stmt) caller, target, newBases, cfg, newVisited, rs);
 							}
-							System.out.println("ATTENTION: debug identitystmt:"+caller+" idx:"+idx);
-							System.out.println("         : debug identitystmt:rs "+rs.size());
 						}
 					}
 				}
@@ -1113,15 +1197,22 @@ public class FlowPathSet {
 							if(method == cfg.getMethodOf(stmt)) continue;
 							if(!method.hasActiveBody()) continue;
 							UnitGraph g = new ExceptionalUnitGraph(method.getActiveBody());
-							System.out.println("   Start "+method.getName()+"@"+method.getDeclaringClass().getName()+" T:"+target);
-							System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
+//							System.out.println("   Start "+method.getName()+"@"+method.getDeclaringClass().getName()+" T:"+target);
+//							System.out.println("   NAP: "+NUAccessPath.listAPToString(bases));
 						    for(Unit u : g.getTails()){
 						    	List<NUAccessPath> tmpBases = new ArrayList<NUAccessPath>();
 								List<NUAccessPath> fitBases = NUAccessPath.findAccessPathWithPrefix(bases, is.getLeftOp());
 								for(NUAccessPath np: fitBases)
 									tmpBases.add(new NUAccessPath(np));
-								System.out.println("   NAP NewBases: "+NUAccessPath.listAPToString(tmpBases));
-						    	findViewDefStmt((Stmt)u, target, tmpBases, cfg, visited, rs);
+//								System.out.println("   NAP NewBases: "+NUAccessPath.listAPToString(tmpBases));
+								Set<Stmt> newVisited = null;
+								if(g.getTails().size() == 1)
+									newVisited = visited;
+								else{
+									newVisited = new HashSet<Stmt>();
+									newVisited.addAll(visited);
+								}
+								findViewDefStmt((Stmt)u, target, tmpBases, cfg, newVisited, rs);
 						    }
 						}
 					}
@@ -1165,9 +1256,17 @@ public class FlowPathSet {
 								newap.replacePrefix(base, thisVar);
 								newBases.add(newap);
 							}
-							System.out.println("   InvokeExpr prefix: T:"+target+" Base:" +base+" AS:"+stmt);
-							System.out.println("   NAP New: "+NUAccessPath.listAPToString(bases));
-							findViewDefStmt((Stmt)u, target, newBases, cfg, visited, rs);
+							
+//							System.out.println("   InvokeExpr prefix: T:"+target+" Base:" +base+" AS:"+stmt+"@"+cfg.getMethodOf(stmt));
+//							System.out.println("   NAP New: "+NUAccessPath.listAPToString(bases)+" "+visited.size()+" Tails:"+g.getTails().size());
+							Set<Stmt> newVisited = null;
+							if(g.getTails().size() == 1)
+								newVisited = visited;
+							else{
+								newVisited = new HashSet<Stmt>();
+								newVisited.addAll(visited);
+							}
+							findViewDefStmt((Stmt)u, target, newBases, cfg, newVisited, rs);
 						}
 					}
 				}
@@ -1177,7 +1276,14 @@ public class FlowPathSet {
 		for (Unit pred : cfg.getPredsOf(stmt)) {
 			if (!(pred instanceof Stmt))
 				continue;
-			findViewDefStmt((Stmt) pred, target, bases, cfg, visited, rs);
+			Set<Stmt> newVisited = null;
+			if(cfg.getPredsOf(stmt).size() == 1)
+				newVisited = visited;
+			else{
+				newVisited = new HashSet<Stmt>();
+				newVisited.addAll(visited);
+			}
+			findViewDefStmt((Stmt) pred, target, bases, cfg, newVisited, rs);
 		}	
 	}
 	
@@ -1186,12 +1292,64 @@ public class FlowPathSet {
 		//either isSame(target, stmt.getLeftOp()) or 
 		//target.fieldName==stmt.getLeftOp().fieldName && NUAccessPath.containsAccessPath(bases, stmt.getLeftOp().getBase())
 		Value right = stmt.getRightOp();
-		System.out.println("      Terminal"+target+" Stmt:"+stmt);
-		System.out.println("      NAP: "+NUAccessPath.listAPToString(bases));
+//		System.out.println("      Terminal"+target+" Stmt:"+stmt);
+//		System.out.println("      NAP: "+NUAccessPath.listAPToString(bases));
 		if(right instanceof InvokeExpr){
 			if(stmt.getInvokeExpr().getMethod().getName().equals(FIND_VIEW_BY_ID))
 				rs.add(stmt);
-			else  System.out.println("ATTENTION: unknown def invoke expr:"+stmt);
+			else  {
+				InvokeExpr ie = stmt.getInvokeExpr();
+				SootMethod sm = ie.getMethod();
+				if(sm.hasActiveBody()){
+					UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+					List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+					if(ie instanceof InstanceInvokeExpr){ //if needs to replace base with $r0
+						Value base = ((InstanceInvokeExpr) ie).getBase();
+						List<NUAccessPath> tmp = NUAccessPath.findAccessPathWithPrefix(bases, base);
+						if(tmp!=null && tmp.size()>0){
+							Local thisVar = null;
+							Iterator<Unit> it = g.iterator();
+							try{
+								while(it.hasNext()){
+									Stmt s = (Stmt)it.next();
+									if(s instanceof IdentityStmt && ((IdentityStmt) s).getRightOp() instanceof ThisRef){
+										thisVar = (Local)((IdentityStmt) s).getLeftOp();
+										break;
+									}
+								}
+							}
+							catch(Exception e){}
+							
+							if(thisVar != null){
+								for(NUAccessPath ap : tmp){
+									NUAccessPath newAP = new NUAccessPath(ap);
+									newAP.replacePrefix(base, thisVar);
+									newBases.add(newAP);
+								}
+							}
+						}
+					}
+					
+					for(Unit u : g.getTails()){
+						List<NUAccessPath> newBases2 = new ArrayList<NUAccessPath>();
+						newBases2.addAll(newBases);
+						if(u instanceof ReturnStmt){
+							//System.out.println("YYYYYY:"+((ReturnStmt) u).getOp()+"  "+u);
+							Set<Stmt> newVisited = null;
+							if(g.getTails().size() == 1)
+								newVisited = visited;
+							else{
+								newVisited = new HashSet<Stmt>();
+								newVisited.addAll(visited);
+							}
+							findViewDefStmt((Stmt)u, ((ReturnStmt) u).getOp(), newBases2, cfg, newVisited, rs);
+						}
+						else{
+							System.out.println("Error: findViewDefStmtHelper"+u.getClass()+"  "+u);
+						}
+					}
+				}// sm.hasActiveBody
+			}
 		}
 		else if(right instanceof NewExpr){
 			String rightName = ((NewExpr)right).getType().getEscapedName();
@@ -1218,7 +1376,14 @@ public class FlowPathSet {
 					newBases.add(new NUAccessPath(np) );
 				if(newTarget instanceof InstanceFieldRef) 
 					NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) newTarget).getBase());
-				findViewDefStmt((Stmt) pred, newTarget, newBases, cfg, visited, rs);
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, newTarget, newBases, cfg, newVisited, rs);
 			}
 		}
 		else if(right instanceof Local || right instanceof StaticFieldRef){
@@ -1229,7 +1394,14 @@ public class FlowPathSet {
 				for(NUAccessPath np: bases)
 					newBases.add(new NUAccessPath(np) );
 				//NUAccessPath current = NUAccessPath.findAccessPath(newBases, stmt.getLeftOp());
-				findViewDefStmt((Stmt) pred, right, newBases, cfg, visited, rs);
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, right, newBases, cfg, newVisited, rs);
 			}
 		}
 		else if(right instanceof InstanceFieldRef){
@@ -1240,7 +1412,14 @@ public class FlowPathSet {
 				for(NUAccessPath np: bases)
 					newBases.add(new NUAccessPath(np) );
 				NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) right).getBase());
-				findViewDefStmt((Stmt) pred, right, newBases, cfg, visited, rs);
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, right, newBases, cfg, newVisited, rs);
 			}
 		}
 		else 
