@@ -28,6 +28,7 @@ import soot.jimple.ArrayRef;
 import soot.jimple.AssignStmt;
 import soot.jimple.CastExpr;
 import soot.jimple.Constant;
+import soot.jimple.DefinitionStmt;
 import soot.jimple.FieldRef;
 import soot.jimple.IdentityStmt;
 import soot.jimple.InstanceFieldRef;
@@ -43,12 +44,14 @@ import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
 import soot.jimple.ThisRef;
+
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.internal.JimpleLocal;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
 import soot.jimple.toolkits.scalar.ConstantPropagatorAndFolder;
+import soot.tagkit.IntegerConstantValueTag;
 import soot.tagkit.StringConstantValueTag;
 import soot.tagkit.Tag;
 import soot.toolkits.graph.ExceptionalUnitGraph;
@@ -83,8 +86,16 @@ public class FlowPathSet {
 	}
 	
 	static public Integer getViewIdFromStmt(Stmt stmt){
-		if(stmt==null || !stmt.containsInvokeExpr())
+		if(stmt==null )
 			return null;
+		if(!stmt.containsInvokeExpr() && !isDynamicWidgetOrDialogSource(stmt))
+			return null;
+		else if(isDynamicWidgetOrDialogSource(stmt)){
+			GlobalData gData = GlobalData.getInstance();
+			Integer id = gData.getDynamicViewID(stmt, icfg);
+			//System.out.println("DEBUG GETDYNAMICVIEWID:"+id);
+			return id;
+		}
 		InvokeExpr ie = stmt.getInvokeExpr();
 		SootMethod sm = ie.getMethod();
 		//TODO: add setContentView
@@ -303,9 +314,6 @@ public class FlowPathSet {
 	private Map<String, Set<FlowPath>> preferenceSinkMap;
 	private Map<String, Set<FlowPath>> preferenceSourceMap;
 	
-	
-	
-	
 	public Map<String, Set<Integer>> getIntentKey2ViewIDMap() {
 		return intentKey2ViewIDMap;
 	}
@@ -314,9 +322,9 @@ public class FlowPathSet {
 		return bundleKey2ViewIDMap;
 	}
 
-	public Map<Stmt, Set<Stmt>> getPreferenceValue2ViewMap() {
-		return preferenceValue2ViewMap;
-	}
+//	public Map<Stmt, Set<Stmt>> getPreferenceValue2ViewMap() {
+//		return preferenceValue2ViewMap;
+//	}
 
 	public Map<String, List<Stmt>> getRegistryMap() {
 		return registryMap;
@@ -379,7 +387,7 @@ public class FlowPathSet {
 		this.eventRegistryMethodSet = new HashSet<String>(this.eventListenerMap.values());
 		
 		buildEventRegisteryMapAndActivityLayoutMap();
-		extractDynamicTexts();
+		//extractDynamicTexts();
 		
 		viewFlowMap = new HashMap<Integer, Set<Integer>>();
 		viewStmtFlowMap = new HashMap<Integer, Set<Stmt>>();
@@ -412,7 +420,8 @@ public class FlowPathSet {
 			return ;
 		}
 		
-		if(fp.getSource().getSource().toString().contains(FIND_VIEW_BY_ID_SIGNATURE_STR)){
+		if(fp.getSource().getSource().toString().contains(FIND_VIEW_BY_ID_SIGNATURE_STR) ||
+				isDynamicWidgetOrDialogSource(fp.getSource().getSource())){
 			if(fp.getSink().getSink().toString().contains(PREFERENCE_PUT_SIGNATURE_STR)){
 				//View to Preference Correlation
 				Stmt src = fp.getSource().getSource();
@@ -426,6 +435,7 @@ public class FlowPathSet {
 					set.add(src);
 					preferenceValue2ViewMap.put(sink, set);
 				}
+				
 				if(key!=null && viewID!=null){
 					System.out.println("NULIST: View2Preference: Found one map: "+key+" => "+viewID);
 					if(preferenceKey2ViewIDMap.containsKey(key))
@@ -539,8 +549,6 @@ public class FlowPathSet {
 		}
 		//CASE: sink is Bundle put and source contains sensitive data
 		if(fp.getSink().getSink().toString().contains(BUNDLE_PUT_SIGNATURE_STR)){
-//			System.out.println("NULIST: TODO: sink is Bundle put. "+fp.getSink().getSink());
-//			System.out.println("  "+fp.getSource().getSource());
 			if(isRealSource(fp.getSource().getSource())){
 				//TODO: store the sensitive source data to bundleSinkMap
 				Stmt sink = fp.getSink().getSink();
@@ -626,6 +634,29 @@ public class FlowPathSet {
 		fp.setId(lst.size());
 		lst.add(fp);
 		addedFlowSet.add(fp.getSignature());
+	}
+	
+	static private boolean isDynamicWidgetOrDialogSource(Stmt stmt){
+		if(stmt instanceof DefinitionStmt){
+			DefinitionStmt as = (DefinitionStmt)stmt;
+			Value right = as.getRightOp();
+			if(right instanceof NewExpr){
+				String rightName = ((NewExpr)right).getType().getEscapedName();
+				String[] elems = rightName.split("\\.");
+				//System.out.println("DDDDD:"+rightName+" "+elems.length);
+				if(elems!=null && elems.length>0){
+					//View
+					if(elems.length>1 && elems[elems.length-2].equals("widget") && elems[0].equals("android"))
+						return true;
+					else if(elems.length>=3 && 
+							elems[0].equals("android") && elems[1].equals("app") && 
+							elems[elems.length-1].contains("Dialog")){
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 	
 	private boolean isRealSource(Stmt source){
@@ -763,58 +794,7 @@ public class FlowPathSet {
 		this.lifeCycleEventListenerSet.add("onDestroy");	
 	}
 	
-	public void extractDynamicTexts(){
-		final String SET_TEXT_API = "setText";
-		final String SET_TITLE_API = "setTitle";
-		for (QueueReader<MethodOrMethodContext> rdr =
-				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
-			SootMethod m = rdr.next().method();
-			if(!m.hasActiveBody())
-				continue;
-			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
-//			UnitGraph g1 = new ExceptionalUnitGraph(m.getActiveBody());
-//			if(g.getHeads().size() > 0){
-//				Set<Unit> tmp = new HashSet<Unit>();
-//				tmp.add(g.getHeads().get(0));
-//				if(tmp.contains(g1.getHeads().get(0)) ){
-//					System.out.println("YES!!");
-//				}
-//				else {
-//					System.out.println("NONO!!"+g.getHeads().get(0)+" VS "+g1.getHeads().get(0));
-//				}
-//			}
-		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
-		    for (Unit u : orderer.newList(g, false)) {
-		    	Stmt stmt = (Stmt)u;
-		    	if(!stmt.containsInvokeExpr())
-		    		continue;
-		    	InvokeExpr ie = stmt.getInvokeExpr();
-		    	if(ie.getMethod().getName().equals(SET_TEXT_API) ||
-		    			ie.getMethod().getName().equals(SET_TITLE_API)){
-		    		if(! (ie instanceof InstanceInvokeExpr) ) continue;
-		    		InstanceInvokeExpr iie = (InstanceInvokeExpr)ie;
-		    		Set<Stmt> rs = new HashSet<Stmt>();
-		    		System.out.println("DEBUGTEST: target: "+stmt +"@"+icfg.getMethodOf(stmt));
-		    		findViewDefStmt(stmt, iie.getBase(), new ArrayList<NUAccessPath>(),
-		    				icfg, new HashSet<Stmt>(), rs);
-		    		
-		    		for(Stmt r : rs)
-		    			System.out.println("DEBUGTEST: origin: "+r+"@"+icfg.getMethodOf(stmt));
-		    		System.out.println("");
-		    		String texts = "";
-		    		if(ie.getMethod().getParameterCount() >= 1){
-		    			Type t = ie.getMethod().getParameterType(0);
-		    			if(t.getEscapedName().equals("int")){
-		    				
-		    			}
-		    			else {//String
-		    				
-		    			}
-		    		}
-		    	}
-		    }
-		}
-	}
+	
 	
 	private void buildEventRegisteryMapAndActivityLayoutMap(){
 		for (QueueReader<MethodOrMethodContext> rdr =
@@ -990,6 +970,7 @@ public class FlowPathSet {
 	}
 	/* Exactly the same! 
 	 * Not include two different InstanceFieldRefs point to the same value. */
+	/*
 	private boolean sameValue(Value left, Value right){
 		if((left instanceof Local) && (right instanceof Local))
 			return ((Local)left).getName().equals(((Local)right).getName());
@@ -1426,7 +1407,7 @@ public class FlowPathSet {
 			System.out.println("ATTENTION: unknown def expr:"+stmt);
 		return;
 	}
-	
+	*/
 	private static String findLastResStringAssignment(Stmt stmt, Value target, 
 			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited) {
 		if(visited.contains(stmt)){

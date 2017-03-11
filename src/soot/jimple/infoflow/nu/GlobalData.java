@@ -1,8 +1,11 @@
 package soot.jimple.infoflow.nu;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import heros.InterproceduralCFG;
@@ -32,6 +35,10 @@ public class GlobalData {
 			new HashMap<String, Integer>();
 	final private Map<String, Integer> fieldIDMap = 
 			new HashMap<String, Integer>();
+	final private Map<String, List<String>> dynamicViewTextMap =
+			new HashMap<String, List<String>>();
+	final private Map<String, Integer> dynamicViewStmtIDMap = 
+			new HashMap<String, Integer>();
 	boolean enableInterComponent = false;
 	
 	public void setEnableInterComponent(boolean flag){
@@ -48,6 +55,15 @@ public class GlobalData {
 	private GlobalData(){}
 	
 	private boolean allowModification = true;
+	private IInfoflowCFG icfg = null;
+	
+	public void setICFG(IInfoflowCFG icfg){
+		this.icfg = icfg;
+	}
+	
+	public IInfoflowCFG getICFG(){
+		return icfg;
+	}
 	
 	public void setAllowModification(boolean flag){
 		this.allowModification = flag;
@@ -113,6 +129,66 @@ public class GlobalData {
 	
 	public void addViewID(String stmtTag, Integer id){
 		viewIDMap.put(stmtTag, id);
+	}
+	
+	public void addTextToDyanmicView(Stmt view, String text, BiDiInterproceduralCFG<Unit, SootMethod> cfg){
+		String key = this.createStmtSignature(view, (IInfoflowCFG)cfg);
+		List<String> texts = this.dynamicViewTextMap.get(key);
+		if(texts == null){
+			texts = new ArrayList<String>();
+			dynamicViewTextMap.put(key, texts);
+		}
+		texts.add(text);
+		if(!dynamicViewStmtIDMap.containsKey(key))
+			dynamicViewStmtIDMap.put(key, dynamicViewStmtIDMap.size()+1);
+	}
+	
+	public String getDynamicViewType(Integer id){
+		String key = null;
+		for(Entry<String, Integer> entry : dynamicViewStmtIDMap.entrySet()){
+			if(entry.getValue() == id){
+				key = entry.getKey();
+				break;
+			}
+		}
+		if(key != null){
+			String[] tmp = key.split("@");
+			if (tmp.length > 0){
+				tmp = tmp[0].split("new");
+				if(tmp.length > 1)
+					key = tmp[1].trim();
+			}
+		}
+		return key;
+	}
+	
+	public String getDynamicTextsFromViewID(Integer id){
+		String key = null;
+		for(Entry<String, Integer> pair : dynamicViewStmtIDMap.entrySet()){
+			if(pair.getValue() == id){
+				key = pair.getKey();
+				break;
+			}
+		}
+		if(key==null) return null;
+		
+		List<String> rs = dynamicViewTextMap.get(key);
+		if(rs == null) return null;
+		StringBuilder sb = new StringBuilder();
+		for(String str : rs)
+			sb.append(str+",");
+		return sb.toString();
+	}
+	
+	public Integer getDynamicViewID(Stmt view, BiDiInterproceduralCFG<Unit, SootMethod> cfg){
+		if(cfg == null)
+			cfg = icfg;
+		String key = this.createStmtSignature(view, (IInfoflowCFG)cfg);
+		return this.dynamicViewStmtIDMap.get(key);
+	}
+	
+	public List<String> getDynamicViewTexts(Stmt view,  IInfoflowCFG cfg){
+		return dynamicViewTextMap.get(createStmtSignature(view, cfg));
 	}
 	
 	public void addViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){

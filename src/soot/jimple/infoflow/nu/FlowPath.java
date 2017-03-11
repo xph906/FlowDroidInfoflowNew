@@ -164,13 +164,14 @@ public class FlowPath {
 		Queue<SootMethod> queue = new LinkedList<SootMethod>();
 		Set<String> visited = new HashSet<String>();
 		
-		for(Stmt stmt : this.path){
-			SootMethod sm = icfg.getMethodOf(stmt);
-			if(visited.contains(sm.getSignature()))
-				continue;
-			queue.add(sm);
-			visited.add(sm.getSignature());
-		}
+		//for(Stmt stmt : this.path){
+		Stmt srcStmt = source.getSource();
+		SootMethod m = icfg.getMethodOf(srcStmt);
+		//if(visited.contains(sm.getSignature()))
+		//	continue;
+		queue.add(m);
+		visited.add(m.getSignature());
+		//}
 		List<Stmt> rs = new ArrayList<Stmt>();
 		List<Stmt> rsLifeCycle = new ArrayList<Stmt>();
 		while(!queue.isEmpty()){
@@ -493,7 +494,7 @@ public class FlowPath {
 		StringBuilder sb = new StringBuilder();
 		sb.append("PathBegin:\n");
 		for(Stmt stmt : fullPath)
-			sb.append("  "+stmt.toString()+"\n");
+			sb.append("  "+stmt.toString()+"@"+icfg.getMethodOf(stmt)+"\n");
 		sb.append("PathEnd:\n");
 		return sb.toString();
 	}

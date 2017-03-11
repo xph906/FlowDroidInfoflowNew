@@ -223,7 +223,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				Integer intVal = null;
 				Stmt initStmt = null;
 				while(taintSource!=null){	
-					//System.out.println("  TaintSrc:"+taintSource.getCurrentStmt()+" ||");
+					
 					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
 					if(intVal !=null){
 						//System.out.println("  SRC INT:"+taintSource.getCurrentStmt());
@@ -241,8 +241,10 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 					taintSource = taintSource.getPredecessor();
 				}
 				if(intVal != null){
-					for(int flowId : lfp)
+					for(int flowId : lfp){
 						fps.addViewFlowMapping(flowId, intVal);	
+						System.out.println("  TaintSrc:"+(Stmt)src+" ||"+flowId+" ViewID:"+intVal);
+					}
 				}
 				else if(initStmt != null){
 					for(int flowId : lfp)
