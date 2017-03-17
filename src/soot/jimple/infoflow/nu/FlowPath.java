@@ -30,6 +30,7 @@ import soot.jimple.Stmt;
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
+import soot.jimple.infoflow.source.ISourceSinkManager;
 import soot.jimple.toolkits.callgraph.CallGraph;
 import soot.jimple.toolkits.callgraph.Edge;
 import soot.toolkits.graph.ExceptionalUnitGraph;
@@ -80,7 +81,7 @@ public class FlowPath {
 		
 		fullPath.add(source.getSource());
 		//triggers
-		List<Stmt> triggers = findFlowTrigger();
+		List<Stmt> triggers = findActivationStmts(this.path);
 		System.out.println("  Displaying triggers:"+triggers.size());
 		for(Stmt stmt : triggers){
 			fullPath.add(stmt);
@@ -97,7 +98,7 @@ public class FlowPath {
 		
 		for(Stmt s : fullPath){
 			pathStmtMap.put(buildStmtSignature(s, icfg), s);
-			//System.out.println("    "+icfg.getMethodOf(s).getName()+":"+s);
+			System.out.println("    FULLPATH:"+icfg.getMethodOf(s).getName()+":"+s);
 		}
 		System.out.println("Done FlowPath: "+source.getSource()+"=>"+sink.getSink()+"\n");
 		
@@ -128,7 +129,7 @@ public class FlowPath {
 		
 		System.out.println("Start FlowPath2: "+sourceFP.source.getSource()+"=>"+sinkFP.sink.getSink());
 		fullPath.add(sourceFP.source.getSource());
-		List<Stmt> triggers = findFlowTrigger();
+		List<Stmt> triggers = findActivationStmts(this.path);
 		if(triggers.size() > 0){
 			System.out.println("  Displaying triggers:"+triggers.size());
 			for(Stmt stmt : triggers){
@@ -164,14 +165,15 @@ public class FlowPath {
 		Queue<SootMethod> queue = new LinkedList<SootMethod>();
 		Set<String> visited = new HashSet<String>();
 		
-		//for(Stmt stmt : this.path){
-		Stmt srcStmt = source.getSource();
-		SootMethod m = icfg.getMethodOf(srcStmt);
-		//if(visited.contains(sm.getSignature()))
-		//	continue;
-		queue.add(m);
-		visited.add(m.getSignature());
-		//}
+		queue.add(icfg.getMethodOf(source.getSource()));
+		visited.add(icfg.getMethodOf(source.getSource()).getSignature());
+		for(Stmt stmt : this.path){
+			SootMethod m = icfg.getMethodOf(stmt);
+			if(visited.contains(m.getSignature()))
+				continue;
+			queue.add(m);
+			visited.add(m.getSignature());
+		}
 		List<Stmt> rs = new ArrayList<Stmt>();
 		List<Stmt> rsLifeCycle = new ArrayList<Stmt>();
 		while(!queue.isEmpty()){
@@ -180,7 +182,7 @@ public class FlowPath {
 			allTrigerMethodSet.add(sm.getName());
 			Matcher mat = callbackMethodNamePatttern.matcher(sm.getName());
 			if(!this.lifeCycleEventListenerSet.contains(sm.getName()) && mat.find()){
-				//System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
+				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
 				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
 				if(lst != null){
 					for(Stmt s : lst){
@@ -226,8 +228,127 @@ public class FlowPath {
 			System.out.println("NULIST:  no trigger found!");
 		}
 		
-		//System.out.println("Done findFlowTrigger");
 		return rs;
+	}
+	
+	private List<Stmt> findActivationStmts(Stmt[] path){
+		List<Stmt> calbackRs = new ArrayList<Stmt>();
+		List<Stmt> lifeCycleRs = new ArrayList<Stmt>();
+		if(path == null || path.length==0)
+			return calbackRs;
+		
+		for(int i=path.length-1; i>0; i--){
+			Stmt cur = path[i];
+			Stmt prev = path[i-1];
+			
+			SootMethod curMethod = icfg.getMethodOf(cur);
+			SootMethod prevMethod = icfg.getMethodOf(prev);
+			
+			if(curMethod.getSignature().equals(prevMethod.getSignature()))
+				continue;
+			else {
+				if(prev.containsInvokeExpr()){
+					InvokeExpr ie = prev.getInvokeExpr();
+					if(ie.getMethod().getSignature().equals(curMethod.getSignature())){
+						allTrigerMethodSet.add(curMethod.getName());
+						Matcher mat = callbackMethodNamePatttern.matcher(curMethod.getName());
+						if(!this.lifeCycleEventListenerSet.contains(curMethod.getName()) && mat.find()){
+							System.out.println("NULIST DEBUG: Found trigger1: "+curMethod.getDeclaringClass().getShortName());
+							List<Stmt> lst = this.registryMap.get(curMethod.getDeclaringClass().toString());
+							if(lst != null){
+								for(Stmt s : lst)
+									calbackRs.add(s);
+							}
+						}
+						else if(this.lifeCycleEventListenerSet.contains(curMethod.getName())){
+							System.out.println("NULIST DEBUG: Found trigger2: "+curMethod.getSignature());
+							List<Stmt> lst = this.registryMap.get(curMethod.getSignature());
+							if(lst != null){
+								for(Stmt s : lst)
+									lifeCycleRs.add(s);
+							}
+							declaringClassSet.add(curMethod.getDeclaringClass().getName());
+						}
+						continue;			
+					}
+				}
+			}
+			
+			//find caller of this stmt's methods
+			findActivationStmtsHelper(curMethod, calbackRs, lifeCycleRs);
+		}
+		if(path.length > 0)
+			findActivationStmtsHelper(icfg.getMethodOf(path[0]), calbackRs, lifeCycleRs);
+		
+		if(calbackRs.size() > 0)
+			return calbackRs;
+		else
+			return lifeCycleRs;
+	}
+	
+private void findActivationStmtsHelper(SootMethod method, List<Stmt> calbackRs, List<Stmt> lifeCycleRs){
+		if(this.icfg==null){
+			System.out.println("NULIST DEBUG: no parent method for source");
+			return;
+		}
+		if(method.getName().equals("dummyMainMethod"))
+			return ;
+		
+		Queue<SootMethod> queue = new LinkedList<SootMethod>();
+		Set<String> visited = new HashSet<String>();
+		
+		queue.add(method);
+		visited.add(method.getSignature());
+		
+		while(!queue.isEmpty()){
+			SootMethod sm = queue.poll();
+			allTrigerMethodSet.add(sm.getName());
+			Matcher mat = callbackMethodNamePatttern.matcher(sm.getName());
+			if(!this.lifeCycleEventListenerSet.contains(sm.getName()) && mat.find()){
+				System.out.println("NULIST DEBUG: Found trigger1: "+sm.getDeclaringClass().getShortName());
+				List<Stmt> lst = this.registryMap.get(sm.getDeclaringClass().toString());
+				if(lst != null){
+					for(Stmt s : lst)
+						calbackRs.add(s);
+				}
+			}
+			else if(this.lifeCycleEventListenerSet.contains(sm.getName())){
+				System.out.println("NULIST DEBUG: Found trigger2: "+sm.getSignature());
+				List<Stmt> lst = this.registryMap.get(sm.getSignature());
+				if(lst == null) continue;
+				for(Stmt s : lst)
+					lifeCycleRs.add(s);
+				declaringClassSet.add(sm.getDeclaringClass().getName());
+			}
+			else{
+				Iterator<Edge> edges = cg.edgesInto(sm);
+				while(edges.hasNext()){
+					Edge edge = edges.next();
+					SootMethod predecessor = edge.getSrc().method();
+					if(predecessor == null) continue;
+					if(!visited.contains(predecessor.getSignature())){
+						visited.add(predecessor.getSignature());
+						queue.add(predecessor);
+					}
+				}
+			}
+		}
+		
+//		System.out.flush();
+//		if(rs.size() > 0){
+//			for(Stmt stmt: rs)
+//				System.out.println("NULIST:  event stmt: "+stmt);
+//			return rs;
+//		}
+//		else if(rsLifeCycle.size() > 0){
+//			for(Stmt stmt : rsLifeCycle)
+//				System.out.println("NULIST:  lifecycle stmt: "+stmt);
+//			return rsLifeCycle;
+//		}
+//		else{
+//			System.out.println("NULIST:  no trigger found!");
+//		}
+
 	}
 	
 	public Set<String> getAllTrigerMethodSet() {
@@ -240,6 +361,17 @@ public class FlowPath {
 
 	public Stmt findStmtFromFlowPath(Stmt s, InterproceduralCFG<Unit, SootMethod> newIcfg){
 		return pathStmtMap.get(buildStmtSignature(s, newIcfg));
+	}
+	
+	public List<Integer> findViewsInPaths(ISourceSinkManager mgr){
+		List<Integer> rs = new ArrayList<Integer>();
+		for(Stmt stmt : path){
+			if(mgr.getSourceInfo(stmt, icfg) != null){
+				System.out.println("FoundOneViewInPath: "+stmt);
+				rs.add(FlowPathSet.getViewIdFromStmt(stmt));
+			}
+		}
+		return rs;
 	}
 	
 	private String buildStmtSignature(Stmt s, InterproceduralCFG<Unit, SootMethod> newIcfg){
@@ -257,13 +389,27 @@ public class FlowPath {
 		List<Stmt> rs = new ArrayList<Stmt>();
 		if(path == null || path.length==0)
 			return rs;
-	
+		System.out.println("Show Path:");
+		for(Stmt s : path){
+			System.out.println("STMT:"+s+"@"+icfg.getMethodOf(s)+" "+(s.getClass())+"  "+( s instanceof ReturnVoidStmt));
+		}
+		
 		for(int i=path.length-1; i>0; i--){
 //			System.out.println("    buildFlowFullPath "+i+"/"+path.length);
 //			System.out.flush();
 			Stmt cur = path[i];
-			addStmtToList(rs, cur);
+			if(cur instanceof ReturnVoidStmt)
+				continue;
 			Stmt prev = path[i-1];
+			int j = i-2;
+			while(prev instanceof ReturnVoidStmt){
+				if(j < 0) break;
+				prev = path[j--];
+			}
+			if(prev instanceof ReturnVoidStmt) break;
+			
+			addStmtToList(rs, cur);
+			
 			SootMethod curMethod = icfg.getMethodOf(cur);
 			SootMethod prevMethod = icfg.getMethodOf(prev);
 			
@@ -271,12 +417,16 @@ public class FlowPath {
 				//the two stmts are in the same procedure,
 				//so we need to extract all predicate stmts between these two
 				//this is an intra-procedure analysis
+//				System.out.println(" 1CUR:"+cur+"@"+icfg.getMethodOf(cur));
+//				System.out.println("PREV:"+prev+"@"+icfg.getMethodOf(prev));
 				Set<Stmt> subrs = addStmtIntraProcedure(curMethod, cur, prev);
 				for(Stmt stmt : subrs)
 					addStmtToList(rs, stmt);
 			}
 			else {
 				if(prev.containsInvokeExpr()){
+//					System.out.println(" 2CUR:"+cur+"@"+icfg.getMethodOf(cur));
+//					System.out.println("PREV:"+prev+"@"+icfg.getMethodOf(prev));
 					InvokeExpr ie = prev.getInvokeExpr();
 					if(ie.getMethod().getSignature().equals(curMethod.getSignature())){
 //						System.out.println("    EQUAL:"+curMethod.getSignature());
@@ -298,6 +448,8 @@ public class FlowPath {
 					}
 				}
 				else {
+//					System.out.println(" 3CUR:"+cur+"@"+icfg.getMethodOf(cur));
+//					System.out.println("PREV:"+prev+"@"+icfg.getMethodOf(prev));
 					addStmtToList(rs, cur);
 				}
 			}

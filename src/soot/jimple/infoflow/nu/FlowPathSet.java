@@ -44,10 +44,10 @@ import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
 import soot.jimple.ThisRef;
-
 import soot.jimple.infoflow.results.ResultSinkInfo;
 import soot.jimple.infoflow.results.ResultSourceInfo;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
+import soot.jimple.infoflow.source.ISourceSinkManager;
 import soot.jimple.internal.JimpleLocal;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
 import soot.jimple.toolkits.scalar.ConstantPropagatorAndFolder;
@@ -274,7 +274,15 @@ public class FlowPathSet {
 		return null;
 	}
 	
-	
+	private ISourceSinkManager sourceSinkMgr;
+	public ISourceSinkManager getSourceSinkMgr() {
+		return sourceSinkMgr;
+	}
+
+	public void setSourceSinkMgr(ISourceSinkManager sourceSinkMgr) {
+		this.sourceSinkMgr = sourceSinkMgr;
+	}
+
 	private List<FlowPath> lst;
 	/* Key: the FlowPath's id
 	 * Value: a list of View Id associated with this flow. */
@@ -632,8 +640,21 @@ public class FlowPathSet {
 		
 		//For regular flows, we add them into list.
 		fp.setId(lst.size());
+		//check if source is a view.
 		lst.add(fp);
 		addedFlowSet.add(fp.getSignature());
+	}
+	
+	public void updateViewsInPaths(){
+		if(sourceSinkMgr == null){
+			System.out.println("Error: sourceSinkManager has not been set!");
+			return ;
+		}
+		for(FlowPath fp : lst){
+			List<Integer> viewIDs = fp.findViewsInPaths(sourceSinkMgr);
+			for(Integer id : viewIDs)
+				addViewFlowMapping(fp.getId(), id);	
+		}
 	}
 	
 	static private boolean isDynamicWidgetOrDialogSource(Stmt stmt){
@@ -745,6 +766,9 @@ public class FlowPathSet {
 			 FlowPath fp = lst.get(i);
 			 if(fp.findStmtFromFlowPath(s, icfg) != null)
 				 rs.add(i);
+		 }
+		 if(rs.size() > 1){
+			 System.out.println("DEBUG34: Stmt "+s+" hit "+rs.size()+" flows.");
 		 }
 		 return rs;
 	}

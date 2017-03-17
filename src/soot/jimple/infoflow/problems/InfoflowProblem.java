@@ -222,11 +222,16 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				Abstraction taintSource = source;
 				Integer intVal = null;
 				Stmt initStmt = null;
+				StringBuilder sb = new StringBuilder();
+				sb.append("FlowID:");
+				for(int flowId : lfp)
+					sb.append(flowId+",");
+				
 				while(taintSource!=null){	
 					
 					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
 					if(intVal !=null){
-						//System.out.println("  SRC INT:"+taintSource.getCurrentStmt());
+						System.out.println("  TaintD:"+taintSource.getCurrentStmt()+" "+sb.toString()+" S:"+source);
 						break;
 					}
 					else{
