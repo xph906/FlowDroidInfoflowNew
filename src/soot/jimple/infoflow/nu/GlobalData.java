@@ -40,6 +40,7 @@ public class GlobalData {
 	final private Map<String, Integer> dynamicViewStmtIDMap = 
 			new HashMap<String, Integer>();
 	boolean enableInterComponent = false;
+	private boolean allowSensitiveUISourceUpdate = true;
 	
 	public void setEnableInterComponent(boolean flag){
 		this.enableInterComponent = flag;
@@ -54,7 +55,7 @@ public class GlobalData {
 	
 	private GlobalData(){}
 	
-	private boolean allowModification = true;
+	
 	private IInfoflowCFG icfg = null;
 	
 	public void setICFG(IInfoflowCFG icfg){
@@ -65,8 +66,8 @@ public class GlobalData {
 		return icfg;
 	}
 	
-	public void setAllowModification(boolean flag){
-		this.allowModification = flag;
+	public void setAllowSensitiveUISourceUpdate(boolean flag){
+		this.allowSensitiveUISourceUpdate = flag;
 	}
 	
 	public String createStmtSignature(Stmt stmt, IInfoflowCFG cfg){
@@ -94,14 +95,9 @@ public class GlobalData {
 	}
 	
 	public void addSensitiveUISource(Stmt stmt, IInfoflowCFG cfg){
-		if(!allowModification)
+		if(!allowSensitiveUISourceUpdate)
 			return ;
 		sensitiveUISource.add(stmt);
-//		System.out.println("Added sensitiveStmt:"+sensitiveUISource.size());
-//		for(Stmt s : sensitiveUISource){
-//			System.out.println("  T:"+s.toString());
-//			System.out.println("  S:"+createStmtSignature(s, cfg));
-//		}
 	}
 	
 	public boolean isSensitiveUISource(Stmt stmt){

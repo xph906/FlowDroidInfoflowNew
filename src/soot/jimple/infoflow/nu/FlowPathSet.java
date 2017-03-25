@@ -507,8 +507,13 @@ public class FlowPathSet {
 			}
 			
 			GlobalData gData = GlobalData.getInstance();
-			if(!gData.isSensitiveUISource(fp.getSource().getSource()))
+			if(!gData.isSensitiveUISource(fp.getSource().getSource())){
+				System.out.println("IS SENSITIVE:"+fp.getSource().getSource());
 				return;
+			}
+			else{
+				System.out.println("IS NOT SENSITIVE:"+fp.getSource().getSource());
+			}
 		}//source is findViewByID.
 		
 		//The following is used for inter-component analysis
