@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import nu.NUDisplay;
 import heros.InterproceduralCFG;
 import soot.SootField;
 import soot.SootMethod;
@@ -27,8 +28,8 @@ public class GlobalData {
 			instance = new GlobalData();
 		return instance;
 	}
-	final private Set<Stmt> sensitiveUISource = 
-			new HashSet<Stmt>();
+	final private Set<String> sensitiveUISource = 
+			new HashSet<String>();
 	final private Map<String, Integer> viewIDMap = 
 			new HashMap<String, Integer>();
 	final private Map<String, Integer> layoutIDMap = 
@@ -39,15 +40,8 @@ public class GlobalData {
 			new HashMap<String, List<String>>();
 	final private Map<String, Integer> dynamicViewStmtIDMap = 
 			new HashMap<String, Integer>();
-	boolean enableInterComponent = false;
 	private boolean allowSensitiveUISourceUpdate = true;
 	
-	public void setEnableInterComponent(boolean flag){
-		this.enableInterComponent = flag;
-	}
-	public boolean enableInterComponent(){
-		return this.enableInterComponent;
-	}
 	
 	public static String getFieldKey(SootField sf){
 		return sf.getDeclaringClass() + "@" + sf.getName()+"@"+sf.getType();
@@ -97,11 +91,15 @@ public class GlobalData {
 	public void addSensitiveUISource(Stmt stmt, IInfoflowCFG cfg){
 		if(!allowSensitiveUISourceUpdate)
 			return ;
-		sensitiveUISource.add(stmt);
+		String sig = ToolSet.createStmtSignature(stmt, cfg);
+		sensitiveUISource.add(sig);
 	}
 	
 	public boolean isSensitiveUISource(Stmt stmt){
-		return sensitiveUISource.contains(stmt);
+		String sig = ToolSet.createStmtSignature(stmt, null);
+		boolean rs = sensitiveUISource.contains(sig);
+		if(rs) NUDisplay.debug("isSensitiveUISource: "+stmt+" YES", null);
+		return rs;
 	}
 	
 	public void addFieldID(SootField sf, Integer id){
