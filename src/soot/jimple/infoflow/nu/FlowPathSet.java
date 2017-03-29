@@ -646,13 +646,13 @@ public class FlowPathSet {
 		for(String cls : activityLayoutMap.keySet()){
 			Set<Integer> set = activityLayoutMap.get(cls);
 			for(Integer id : set){
-				System.out.println("Display LAYOUT MAP:"+cls+" => "+id);
+				NUDisplay.debug("Display LAYOUT MAP:"+cls+" => "+id, null);
 			}
 		}
 		for(String listenerClsName : registryMap.keySet()){
 			List<Stmt> list = registryMap.get(listenerClsName);
 			for(Stmt stmt : list){
-				System.out.println("Display Registry Map:"+listenerClsName+" => "+stmt);
+				NUDisplay.debug("Display Registry Map:"+listenerClsName+" => "+stmt, null);
 			}
 		}
 		
@@ -709,8 +709,11 @@ public class FlowPathSet {
 			String fileName = CALLBACK_LIST_FILE_NAME;
 			if (!new File(fileName).exists()) {
 				fileName = "../soot-infoflow-android/AndroidCallbacks.txt";
-				if (!new File(fileName).exists())
-					throw new RuntimeException("Callback definition file not found");
+				if (!new File(fileName).exists()){
+					fileName = "AndroidCallbacks.txt";
+					if (!new File(fileName).exists())
+						throw new RuntimeException("Callback definition file not found");
+				}
 			}
 			rdr = new BufferedReader(new FileReader(fileName));
 			String line;
@@ -719,7 +722,7 @@ public class FlowPathSet {
 					androidCallbacks.add(line);
 		}
 		catch(Exception e){
-			System.err.println("failed to read callback file");
+			NUDisplay.error("failed to read callback file","loadAndroidCallBackListeners");
 			System.exit(1);
 		}
 		
