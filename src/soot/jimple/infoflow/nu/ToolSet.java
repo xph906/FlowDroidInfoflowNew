@@ -8,6 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.Stack;
 
 import nu.NUDisplay;
 import soot.Local;
@@ -20,6 +21,7 @@ import soot.Unit;
 import soot.UnitBox;
 import soot.Value;
 import soot.jimple.AnyNewExpr;
+import soot.jimple.ArrayRef;
 import soot.jimple.AssignStmt;
 import soot.jimple.BinopExpr;
 import soot.jimple.CastExpr;
@@ -28,6 +30,7 @@ import soot.jimple.DefinitionStmt;
 import soot.jimple.FieldRef;
 import soot.jimple.IdentityStmt;
 import soot.jimple.InstanceFieldRef;
+import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
 import soot.jimple.NewArrayExpr;
@@ -39,6 +42,7 @@ import soot.jimple.ReturnStmt;
 import soot.jimple.StaticFieldRef;
 import soot.jimple.Stmt;
 import soot.jimple.StringConstant;
+import soot.jimple.ThisRef;
 import soot.jimple.UnopExpr;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.toolkits.callgraph.CallGraph;
@@ -538,6 +542,255 @@ public class ToolSet {
 		return rs;
 	}
 	
+	public static void findViewDefStmt(Stmt stmt, Value target, List<NUAccessPath> bases,
+			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited, Set<Stmt> rs){
+		long startingTime = System.currentTimeMillis();
+		long timeDiffSeconds = 0;
+		
+		if(visited.contains(stmt))
+			return ;
+		if(cfg == null){
+			NUDisplay.error("Error: findViewDefStmt: cfg is not set", null);
+			return ;
+		}
+		
+		Stack<Stmt> stack = new Stack<Stmt>();
+		stack.add(stmt);
+		
+		while(!stack.isEmpty()){
+			timeDiffSeconds = (System.currentTimeMillis() - startingTime)/1000;
+			if(timeDiffSeconds > 300){//5mins
+				NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
+				continue ;
+			}
+			
+			stmt = stack.pop();
+			visited.add(stmt);
+			
+			if(stmt instanceof AssignStmt){
+				AssignStmt as = (AssignStmt)stmt;
+				if(sameValue(as.getLeftOp(),target) ){
+					findViewDefStmtHelper(as, target, bases, cfg, visited, rs);
+					continue ;
+				}
+				else if(target instanceof InstanceFieldRef){ //as.getLeftOp() != target
+					//if left != right, we only care if target is InstanceFieldRef
+					//because its possible a different Value points to target (alias)
+					Value left = as.getLeftOp();
+					if(pointToSameValue(left, target, bases)){
+						findViewDefStmtHelper(as, target, bases, cfg, visited, rs);	
+						continue ;
+					}
+					
+					//left op doesn't point to the target
+					//check if left is a prefix of one of bases
+					if (!as.containsInvokeExpr() && NUAccessPath.containsAccessPathWithPrefix(bases, left)){
+						List<NUAccessPath> lst= NUAccessPath.findAccessPathWithPrefix(bases, left);
+						for(NUAccessPath ap : lst)
+							ap.replacePrefix(left, as.getRightOp());
+					}
+					else if(NUAccessPath.containsAccessPathWithPrefix(bases, left)){
+						List<NUAccessPath> lst= NUAccessPath.findAccessPathWithPrefix(bases, left);
+						InvokeExpr ie = stmt.getInvokeExpr();
+						SootMethod sm = null;
+						if(ie != null) sm = ie.getMethod();
+						if(sm!=null && sm.hasActiveBody()){
+							UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+							List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+							//if needs to replace base with $r0
+							if(ie instanceof InstanceInvokeExpr){ 
+								Value base = ((InstanceInvokeExpr) ie).getBase();
+								List<NUAccessPath> tmp = NUAccessPath.findAccessPathWithPrefix(bases, base);
+								if(tmp!=null && tmp.size()>0){
+									Local thisVar = null;
+									Iterator<Unit> it = g.iterator();
+									try{
+										while(it.hasNext()){
+											Stmt s = (Stmt)it.next();
+											if(s instanceof IdentityStmt && ((IdentityStmt) s).getRightOp() instanceof ThisRef){
+												thisVar = (Local)((IdentityStmt) s).getLeftOp();
+												break;
+											}
+										}
+									}
+									catch(Exception e){}
+									
+									if(thisVar != null){
+										for(NUAccessPath ap : tmp){
+											NUAccessPath newAP = new NUAccessPath(ap);
+											newAP.replacePrefix(base, thisVar);
+											newBases.add(newAP);
+										}
+									}
+								}
+							}
+							
+							for(Unit u : g.getTails()){
+								List<NUAccessPath> newBases2 = new ArrayList<NUAccessPath>();
+								newBases2.addAll(newBases);
+								if(u instanceof ReturnStmt){
+									//replace left with return value
+									for(NUAccessPath ap : lst){
+										NUAccessPath newAP = new NUAccessPath(ap);
+										newAP.replacePrefix(left, ((ReturnStmt) u).getOp());
+										newBases2.add(newAP);
+									}
+									Set<Stmt> newVisited = null;
+									if(g.getTails().size() == 1)
+										newVisited = visited;
+									else{
+										newVisited = new HashSet<Stmt>();
+										newVisited.addAll(visited);
+									}
+									findViewDefStmt((Stmt)u, target, newBases2, cfg, newVisited, rs);
+								}
+								else{
+									NUDisplay.alert("not ends with ret stmt"+u.getClass()+"  "+u, 
+											"findViewDefStmt");
+								}
+							}
+							
+						}// sm.hasActiveBody
+						
+						for(NUAccessPath ap : lst)
+							bases.remove(ap);
+						if(bases == null)
+							continue ;
+					}
+				}
+			}
+			else if(stmt instanceof IdentityStmt){
+				IdentityStmt is = (IdentityStmt)stmt;
+				//left value is target or left value is a prefix of target
+				if(pointToSameValue( is.getLeftOp(),target, bases) || 
+					(target instanceof InstanceFieldRef && NUAccessPath.containsAccessPathWithPrefix(
+								bases, ((IdentityStmt) stmt).getLeftOp()))){
+					if(is.getRightOp() instanceof ParameterRef){
+						ParameterRef right = (ParameterRef)(is.getRightOp());
+						Value left = ((IdentityStmt) stmt).getLeftOp();
+						int idx = right.getIndex();
+						Collection<Unit> callers = cfg.getCallersOf(cfg.getMethodOf(stmt));
+						if(callers != null && callers.size()>0){
+							for(Unit caller : callers){
+								InvokeExpr ie = ((Stmt)caller).getInvokeExpr();
+								if(idx >= ie.getArgCount()) continue;
+								Value arg = ie.getArg(idx);
+								Set<Stmt> newVisited = null;
+								if(callers.size() == 1)
+									newVisited = visited;
+								else{
+									newVisited = new HashSet<Stmt>();
+									newVisited.addAll(visited);
+								}
+								if(pointToSameValue(left, target, bases)){
+									List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+									if(arg instanceof InstanceFieldRef)
+										newBases.add(new NUAccessPath(((InstanceFieldRef) arg).getBase()));
+									findViewDefStmt((Stmt) caller, arg, newBases, cfg, newVisited, rs);
+								}
+								else{
+									List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+									List<NUAccessPath> fitBases = NUAccessPath.findAccessPathWithPrefix(bases, left);
+									for(NUAccessPath np: fitBases){
+										NUAccessPath newNP = new NUAccessPath(np);
+										newNP.replacePrefix(left, arg);
+										newBases.add(newNP);
+									}
+									if(arg instanceof InstanceFieldRef)
+										NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) arg).getBase());
+									findViewDefStmt((Stmt) caller, target, newBases, cfg, newVisited, rs);
+								}
+							}
+						}
+					}
+					else if(is.getRightOp() instanceof ThisRef){
+						if(pointToSameValue(is.getLeftOp(),target, bases)){
+							NUDisplay.alert("shouldn't come here findViewDefStmt 1", "findViewDefStmt");
+							continue;
+						}
+						try{
+							List<SootMethod> methods = cfg.getMethodOf(stmt).getDeclaringClass().getMethods();
+							for(SootMethod method : methods){
+								if(method == cfg.getMethodOf(stmt)) continue;
+								if(!method.hasActiveBody()) continue;
+								UnitGraph g = new ExceptionalUnitGraph(method.getActiveBody());
+							    for(Unit u : g.getTails()){
+							    	List<NUAccessPath> tmpBases = new ArrayList<NUAccessPath>();
+									List<NUAccessPath> fitBases = NUAccessPath.findAccessPathWithPrefix(bases, is.getLeftOp());
+									for(NUAccessPath np: fitBases)
+										tmpBases.add(new NUAccessPath(np));
+									Set<Stmt> newVisited = null;
+									if(g.getTails().size() == 1)
+										newVisited = visited;
+									else{
+										newVisited = new HashSet<Stmt>();
+										newVisited.addAll(visited);
+									}
+									findViewDefStmt((Stmt)u, target, tmpBases, cfg, newVisited, rs);
+							    }
+							}
+						}
+						catch(Exception e){
+							NUDisplay.error("shouldn't come here findViewDefStmt 1", "findViewDefStmt");
+						}
+					}
+					continue ;
+				}
+			}
+			else if(stmt.containsInvokeExpr() && stmt.getInvokeExpr() instanceof InstanceInvokeExpr){
+				InstanceInvokeExpr iie = (InstanceInvokeExpr)stmt.getInvokeExpr();
+				Value base = iie.getBase();
+				if(NUAccessPath.containsAccessPathWithPrefix(bases, base)){
+					List<NUAccessPath> lst= NUAccessPath.findAccessPathWithPrefix(bases, base);
+					SootMethod method = iie.getMethod();
+					if(method.hasActiveBody()){
+						UnitGraph g = new ExceptionalUnitGraph(method.getActiveBody());
+						Local thisVar = null;
+						Iterator<Unit> it = g.iterator();
+						try{
+							while(it.hasNext()){
+								Stmt s = (Stmt)it.next();
+								if(s instanceof IdentityStmt && ((IdentityStmt) s).getRightOp() instanceof ThisRef){
+									thisVar = (Local)((IdentityStmt) s).getLeftOp();
+									break;
+								}
+							}
+						}
+						catch(Exception e){}
+						if(thisVar != null){
+							for(Unit u : g.getTails()){
+								List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+								for(NUAccessPath ap : lst){
+									NUAccessPath newap = new NUAccessPath(ap);
+									newap.replacePrefix(base, thisVar);
+									newBases.add(newap);
+								}
+								
+								Set<Stmt> newVisited = null;
+								if(g.getTails().size() == 1)
+									newVisited = visited;
+								else{
+									newVisited = new HashSet<Stmt>();
+									newVisited.addAll(visited);
+								}
+								findViewDefStmt((Stmt)u, target, newBases, cfg, newVisited, rs);
+							}
+						}
+					}
+				}
+			}
+			
+			for (Unit pred : cfg.getPredsOf(stmt)) {
+				if (!(pred instanceof Stmt))
+					continue;
+				if(visited.contains(pred))
+					continue;
+				//TODO: ideally, the newVisited should be reset for each predecessor, but it's too slow...
+				stack.add((Stmt)pred);
+			}	
+		}
+	}
+	
 	
 	/*** Private methods ***/
 
@@ -617,6 +870,177 @@ public class ToolSet {
 		return null;
 	}
 	
+	private static void findViewDefStmtHelper(AssignStmt stmt,  Value target, List<NUAccessPath> bases,
+			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited, Set<Stmt> rs){
+		//either isSame(target, stmt.getLeftOp()) or 
+		//target.fieldName==stmt.getLeftOp().fieldName && NUAccessPath.containsAccessPath(bases, stmt.getLeftOp().getBase())
+		Value right = stmt.getRightOp();
+		if(right instanceof InvokeExpr){
+			if(stmt.getInvokeExpr().getMethod().getName().equals(FIND_VIEW_BY_ID))
+				rs.add(stmt);
+			else  {
+				InvokeExpr ie = stmt.getInvokeExpr();
+				SootMethod sm = ie.getMethod();
+				if(sm.hasActiveBody()){
+					UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+					List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+					if(ie instanceof InstanceInvokeExpr){ //if needs to replace base with $r0
+						Value base = ((InstanceInvokeExpr) ie).getBase();
+						List<NUAccessPath> tmp = NUAccessPath.findAccessPathWithPrefix(bases, base);
+						if(tmp!=null && tmp.size()>0){
+							Local thisVar = null;
+							Iterator<Unit> it = g.iterator();
+							try{
+								while(it.hasNext()){
+									Stmt s = (Stmt)it.next();
+									if(s instanceof IdentityStmt && ((IdentityStmt) s).getRightOp() instanceof ThisRef){
+										thisVar = (Local)((IdentityStmt) s).getLeftOp();
+										break;
+									}
+								}
+							}
+							catch(Exception e){}
+							
+							if(thisVar != null){
+								for(NUAccessPath ap : tmp){
+									NUAccessPath newAP = new NUAccessPath(ap);
+									newAP.replacePrefix(base, thisVar);
+									newBases.add(newAP);
+								}
+							}
+						}
+					}
+					
+					for(Unit u : g.getTails()){
+						List<NUAccessPath> newBases2 = new ArrayList<NUAccessPath>();
+						newBases2.addAll(newBases);
+						if(u instanceof ReturnStmt){
+							//System.out.println("YYYYYY:"+((ReturnStmt) u).getOp()+"  "+u);
+							Set<Stmt> newVisited = null;
+							if(g.getTails().size() == 1)
+								newVisited = visited;
+							else{
+								newVisited = new HashSet<Stmt>();
+								newVisited.addAll(visited);
+							}
+							findViewDefStmt((Stmt)u, ((ReturnStmt) u).getOp(), newBases2, cfg, newVisited, rs);
+						}
+						else{
+							System.out.println("Error: findViewDefStmtHelper"+u.getClass()+"  "+u);
+						}
+					}
+				}// sm.hasActiveBody
+			}
+		}
+		else if(right instanceof NewExpr){
+			String rightName = ((NewExpr)right).getType().getEscapedName();
+			String[] elems = rightName.split("\\.");
+			if(elems!=null && elems.length>0){
+				if(elems.length>1 && elems[elems.length-2].equals("widget") && elems[0].equals("android")){
+					rs.add(stmt);  //view
+				}
+				else if(elems.length>=3 && 
+						elems[0].equals("android") && elems[1].equals("app") && 
+						elems[elems.length-1].contains("Dialog")){ //dialog
+					rs.add(stmt);
+				}
+			}
+			else  System.out.println("ATTENTION: unknown def new expr:"+stmt);
+		}
+		else if(right instanceof CastExpr ){
+			for (Unit pred : cfg.getPredsOf(stmt)) {
+				if (!(pred instanceof Stmt))
+					continue;
+				Value newTarget = ((CastExpr) right).getOp();
+				List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+				for(NUAccessPath np: bases)
+					newBases.add(new NUAccessPath(np) );
+				if(newTarget instanceof InstanceFieldRef) 
+					NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) newTarget).getBase());
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, newTarget, newBases, cfg, newVisited, rs);
+			}
+		}
+		else if(right instanceof Local || right instanceof StaticFieldRef){
+			for (Unit pred : cfg.getPredsOf(stmt)) {
+				if (!(pred instanceof Stmt))
+					continue;
+				List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+				for(NUAccessPath np: bases)
+					newBases.add(new NUAccessPath(np) );
+				//NUAccessPath current = NUAccessPath.findAccessPath(newBases, stmt.getLeftOp());
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, right, newBases, cfg, newVisited, rs);
+			}
+		}
+		else if(right instanceof InstanceFieldRef){
+			for (Unit pred : cfg.getPredsOf(stmt)) {
+				if (!(pred instanceof Stmt))
+					continue;
+				List<NUAccessPath> newBases = new ArrayList<NUAccessPath>();
+				for(NUAccessPath np: bases)
+					newBases.add(new NUAccessPath(np) );
+				NUAccessPath.addUniqueAccessPath(newBases, ((InstanceFieldRef) right).getBase());
+				Set<Stmt> newVisited = null;
+				if(cfg.getPredsOf(stmt).size() == 1)
+					newVisited = visited;
+				else{
+					newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+				}
+				findViewDefStmt((Stmt) pred, right, newBases, cfg, newVisited, rs);
+			}
+		}
+		else 
+			System.out.println("ATTENTION: unknown def expr:"+stmt);
+		return;
+	}
+	private static boolean sameValue(Value left, Value right){
+		if((left instanceof Local) && (right instanceof Local))
+			return ((Local)left).getName().equals(((Local)right).getName());
+		else if((left instanceof StaticFieldRef) && (right instanceof StaticFieldRef))
+			return ((StaticFieldRef)left).getFieldRef().getSignature().equals(((StaticFieldRef)right).getFieldRef().getSignature());
+		else if((left instanceof InstanceFieldRef) && (right instanceof InstanceFieldRef)){
+			if( ((InstanceFieldRef)left).getField().getName().equals( ((InstanceFieldRef)right).getField().getName()))
+				return sameValue(((InstanceFieldRef)left).getBase(), ((InstanceFieldRef)right).getBase());	
+		}
+		else if((left instanceof ArrayRef) && (right instanceof ArrayRef)){
+			//TODO: what if $r1[$r2], $r1[$r4], but $r2 is the same with $r4
+			return sameValue(((ArrayRef)left).getBase(), ((ArrayRef)right).getBase()) &&
+					sameValue(((ArrayRef)left).getIndex(), ((ArrayRef)right).getIndex());
+		}
+		else if((left instanceof Constant) && (right instanceof Constant))
+			return left.toString().equals(right.toString());
+		return false;
+	}
+	private static boolean pointToSameValue(Value candidate, Value target, List<NUAccessPath> bases){
+		if(sameValue(candidate, target))
+			return true;
+		if(! (candidate instanceof InstanceFieldRef) )
+			return false;
+		if(! (target instanceof InstanceFieldRef) )
+			return false;
+		
+		if(((InstanceFieldRef)candidate).getField().getName().equals(((InstanceFieldRef)target).getField().getName())){
+			if(NUAccessPath.containsAccessPath(bases, ((InstanceFieldRef)candidate).getBase()))
+				return true;
+		}
+		return false;
+	}
+	
+
 	/*The following methods can be deleted.*/
 	public static void displayMethod(SootMethod sm){
 		PatchingChain<Unit> units = sm.getActiveBody().getUnits();

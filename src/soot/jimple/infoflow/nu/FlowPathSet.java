@@ -279,6 +279,7 @@ public class FlowPathSet {
 		this.lst = new ArrayList<FlowPath>();
 		this.callbackListenerSet = loadAndroidCallBackListeners();
 		this.lifeCycleEventListenerSet = new HashSet<String>();
+		viewFlowMap = new HashMap<Integer, Set<Integer>>();
 		/* Key:
 		 *   1. For UI event, the key is the listener's type;
 		 *   2. For life cycle event (e.g., onCreate), the key is composed 
@@ -291,7 +292,7 @@ public class FlowPathSet {
 		buildLifeCycleEventMap();
 		buildEventRegisteryMapAndActivityLayoutMap();
 		
-		viewFlowMap = new HashMap<Integer, Set<Integer>>();
+		
 		viewStmtFlowMap = new HashMap<Integer, Set<Stmt>>();
 		preferenceValue2ViewMap = new HashMap<Stmt, Set<Stmt>>();
 		preferenceKey2ViewIDMap = new HashMap<String, Set<Integer>>();
@@ -408,6 +409,26 @@ public class FlowPathSet {
 		if(nuConfig.isInterComponentAnalysisEnabled() && handleInterComponentHelper(fp))
 			return ;
 		
+		//get rid of all non-method source
+		if(!fp.getSource().getSource().containsInvokeExpr()){
+			NUDisplay.debug("remove flow: "+fp.getSignature(), "addFlowPath");
+			return ;
+		}
+		
+		//get rid of semi flows.
+		SootMethod sm = fp.getSource().getSource().getInvokeExpr().getMethod();
+		String clsName = sm.getDeclaringClass().getName();
+		if(clsName.contains("android.content.Intent") || 
+				clsName.contains("android.os.Bundle") ||
+				clsName.contains("SharedPreferences"))
+			return ;
+		sm = fp.getSink().getSink().getInvokeExpr().getMethod();
+		clsName = sm.getDeclaringClass().getName();
+		if(clsName.contains("android.content.Intent") || 
+				clsName.contains("android.os.Bundle") ||
+				clsName.contains("SharedPreferences"))
+			return ;
+		
 		//For regular flows, we add them into list.
 		fp.setId(lst.size());
 		lst.add(fp);
@@ -421,9 +442,13 @@ public class FlowPathSet {
 			return ;
 		}
 		for(FlowPath fp : lst){
+			fp.getId();
 			List<Integer> viewIDs = fp.findViewsInPaths(sourceSinkMgr);
-			for(Integer id : viewIDs)
+			if(viewIDs == null) continue;
+			for(Integer id : viewIDs){
+				if(id == null) continue;
 				addViewFlowMapping(fp.getId(), id);	
+			}
 		}
 	}
 	
@@ -491,6 +516,7 @@ public class FlowPathSet {
 	}
 	
 	public void addViewFlowMapping(int flowId, int viewId){
+		
 		if(viewFlowMap.containsKey(flowId)){
 			viewFlowMap.get(flowId).add(viewId);
 		}

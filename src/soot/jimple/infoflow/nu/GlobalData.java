@@ -103,8 +103,6 @@ public class GlobalData {
 	}
 	
 	public void addFieldID(SootField sf, Integer id){
-		System.out.println("Stored Field ID: "+getFieldKey(sf)+" => "+id);
-		//System.out.println("TODO: solve the duplicate cases");
 		fieldIDMap.put(getFieldKey(sf), id);
 	}
 	
@@ -187,12 +185,12 @@ public class GlobalData {
 	
 	public void addViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){
 		if(!stmt.containsInvokeExpr() || !stmt.getInvokeExpr().getMethod().getName().equals("findViewById")){
-			System.err.println("Error addViewID: stmt doesn't contain findViewById: "+stmt);
+			NUDisplay.error("addViewID: stmt doesn't contain findViewById: "+stmt, null);
 			return ;
 		}
 		SootMethod sm = icfg.getMethodOf(stmt);
 		if(!sm.hasActiveBody()){
-			System.err.println("Error addViewID: stmt is not in active method: "+sm);
+			NUDisplay.error("addViewID: stmt is not in active method: "+sm, null);
 			return ;
 		}
 		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
@@ -209,12 +207,12 @@ public class GlobalData {
 	
 	public Integer getViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg){
 		if(!stmt.containsInvokeExpr() || !stmt.getInvokeExpr().getMethod().getName().equals("findViewById")){
-			System.err.println("Error getViewID: stmt doesn't contain findViewById: "+stmt);
+			NUDisplay.error("Error getViewID: stmt doesn't contain findViewById: "+stmt, null);
 			return null;
 		}
 		SootMethod sm = icfg.getMethodOf(stmt);
 		if(!sm.hasActiveBody()){
-			System.err.println("Error getViewID: stmt is not in active method: "+sm);
+			NUDisplay.error("Error getViewID: stmt is not in active method: "+sm, null);
 			return null;
 		}
 		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
