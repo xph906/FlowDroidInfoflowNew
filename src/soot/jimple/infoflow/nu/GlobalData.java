@@ -40,6 +40,8 @@ public class GlobalData {
 			new HashMap<String, List<String>>();
 	final private Map<String, Integer> dynamicViewStmtIDMap = 
 			new HashMap<String, Integer>();
+	final private Map<String, Set<String>> internetURLAddrMap = 
+			new HashMap<String, Set<String>>();
 	private boolean allowSensitiveUISourceUpdate = true;
 	
 	
@@ -64,29 +66,45 @@ public class GlobalData {
 		this.allowSensitiveUISourceUpdate = flag;
 	}
 	
-	public String createStmtSignature(Stmt stmt, IInfoflowCFG cfg){
-		SootMethod sm = cfg.getMethodOf(stmt);
-		if(sm == null)
-			return stmt.toString()+"@null@POSnull";
-		
-		String methodName = sm.getSignature();
-		StringBuilder sb = new StringBuilder();
-		sb.append(stmt.toString()+"@"+methodName+"@POS:");
-		if(!sm.hasActiveBody()){
-			sb.append("null");
-			return sb.toString();
+	public void addInternetSinkURL(Stmt sink, String url){
+		String sig = ToolSet.createStmtSignature(sink, null);
+		if(internetURLAddrMap.containsKey(sig))
+			internetURLAddrMap.get(sig).add(url.toLowerCase());
+		else{
+			Set<String> tmp = new HashSet<String>();
+			tmp.add(url.toLowerCase());
+			internetURLAddrMap.put(sig, tmp);
 		}
-		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
-	    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
-	    int cnt = 0;
-	    for (Unit u : orderer.newList(g, false)) {
-	    	cnt++;
-	    	if(stmt == (Stmt)u)
-	    		break;
-	    }
-	    sb.append(cnt);
-	    return sb.toString();
 	}
+	
+	public Set<String> getInternetSinkURL(Stmt sink){
+		String sig = ToolSet.createStmtSignature(sink, null);
+		return internetURLAddrMap.get(sig);
+	}
+	//createStmtSignature
+//	public String createStmtSignature(Stmt stmt, IInfoflowCFG cfg){
+//		SootMethod sm = cfg.getMethodOf(stmt);
+//		if(sm == null)
+//			return stmt.toString()+"@null@POSnull";
+//		
+//		String methodName = sm.getSignature();
+//		StringBuilder sb = new StringBuilder();
+//		sb.append(stmt.toString()+"@"+methodName+"@POS:");
+//		if(!sm.hasActiveBody()){
+//			sb.append("null");
+//			return sb.toString();
+//		}
+//		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+//	    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
+//	    int cnt = 0;
+//	    for (Unit u : orderer.newList(g, false)) {
+//	    	cnt++;
+//	    	if(stmt == (Stmt)u)
+//	    		break;
+//	    }
+//	    sb.append(cnt);
+//	    return sb.toString();
+//	}
 	
 	public void addSensitiveUISource(Stmt stmt, IInfoflowCFG cfg){
 		if(!allowSensitiveUISourceUpdate)
@@ -124,7 +142,7 @@ public class GlobalData {
 	}
 	
 	public void addTextToDyanmicView(Stmt view, String text, BiDiInterproceduralCFG<Unit, SootMethod> cfg){
-		String key = this.createStmtSignature(view, (IInfoflowCFG)cfg);
+		String key = ToolSet.createStmtSignature(view, (IInfoflowCFG)cfg);
 		List<String> texts = this.dynamicViewTextMap.get(key);
 		if(texts == null){
 			texts = new ArrayList<String>();
@@ -175,12 +193,12 @@ public class GlobalData {
 	public Integer getDynamicViewID(Stmt view, BiDiInterproceduralCFG<Unit, SootMethod> cfg){
 		if(cfg == null)
 			cfg = icfg;
-		String key = this.createStmtSignature(view, (IInfoflowCFG)cfg);
+		String key = ToolSet.createStmtSignature(view, (IInfoflowCFG)cfg);
 		return this.dynamicViewStmtIDMap.get(key);
 	}
 	
 	public List<String> getDynamicViewTexts(Stmt view,  IInfoflowCFG cfg){
-		return dynamicViewTextMap.get(createStmtSignature(view, cfg));
+		return dynamicViewTextMap.get(ToolSet.createStmtSignature(view, cfg));
 	}
 	
 	public void addViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){

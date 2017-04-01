@@ -76,7 +76,7 @@ public class FlowPath {
 		this.path = this.source.getPath();
 		
 		buildFullPath();
-		NUDisplay.debug("Done creating FlowPath "+randomID, null);
+		NUDisplay.debug("Done creating FlowPath "+randomID+"\n", null);
 	}
 	
 	public FlowPath(FlowPath sourceFP, FlowPath sinkFP){
@@ -184,7 +184,7 @@ public class FlowPath {
 			pathStmtMap.put(buildStmtSignature(s, icfg), s);
 			NUDisplay.debug("    "+icfg.getMethodOf(s).getName()+":"+s, null);
 		}
-		NUDisplay.debug("Done FlowPath: "+source.getSource()+"=>"+sink.getSink()+"\n", null);
+		NUDisplay.debug("Done FlowPath: "+source.getSource()+"=>"+sink.getSink(), null);
 	}
 	
 	private List<Stmt> findActivationStmts(Stmt[] path){
@@ -274,10 +274,12 @@ public class FlowPath {
 			}
 			else{
 				Iterator<Edge> edges = cg.edgesInto(sm);
+				//NUDisplay.debug("CGDEBUG: TARGET:"+sm.getSignature(), null);
 				while(edges.hasNext()){
 					Edge edge = edges.next();
 					SootMethod predecessor = edge.getSrc().method();
 					if(predecessor == null) continue;
+					//NUDisplay.debug("  CGDEBUG: PARENT:"+predecessor.getSignature(), null);
 					if(!visited.contains(predecessor.getSignature())){
 						visited.add(predecessor.getSignature());
 						queue.add(predecessor);

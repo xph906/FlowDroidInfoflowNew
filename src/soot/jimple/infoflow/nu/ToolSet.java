@@ -67,6 +67,7 @@ public class ToolSet {
 	static IInfoflowCFG savedCFG = null;
 	static CallGraph cg = null;
 	static IResourceManager resMgr = null;
+	static long cfgStartingTime = 0;
 	public static void setICFG(IInfoflowCFG cfg){
 		savedCFG = cfg;
 		cg = Scene.v().getCallGraph();
@@ -362,8 +363,12 @@ public class ToolSet {
 						}
 					}
 					if(assign.getRightOp() instanceof StaticFieldRef){
-						StaticFieldRef sfr = (StaticFieldRef)assign.getRightOp();
+						StaticFieldRef sfr = (StaticFieldRef)(assign.getRightOp());
 						target = assign.getRightOp();
+					}
+					else if(assign.getRightOp() instanceof InstanceFieldRef){
+						InstanceFieldRef ifr = (InstanceFieldRef)(assign.getRightOp() );
+						
 					}
 				} 
 				else if(assign.getRightOp() instanceof Local){
@@ -372,9 +377,10 @@ public class ToolSet {
 				else if(assign.getRightOp() instanceof CastExpr){
 					target = assign.getRightOp();
 				}
-				else if (assign.getRightOp() instanceof InvokeExpr) {
+				else if (assign.getRightOp()instanceof InvokeExpr) {
 					System.out.println("NULIST: TODO: findLastResStringAssignment right invoke expr:"+assign.getRightOp());
-					return null;
+					InvokeExpr ie = (InvokeExpr)assign.getRightOp();
+					return "<METHODCALL>:"+ie.getMethod().getSignature();
 				}
 			}
 			
@@ -542,10 +548,17 @@ public class ToolSet {
 		return rs;
 	}
 	
+	public static void setCFGStartingTime(){
+		cfgStartingTime = System.currentTimeMillis();
+	}
+	
 	public static void findViewDefStmt(Stmt stmt, Value target, List<NUAccessPath> bases,
 			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited, Set<Stmt> rs){
-		long startingTime = System.currentTimeMillis();
-		long timeDiffSeconds = 0;
+		long timeDiffSeconds = (System.currentTimeMillis() - cfgStartingTime)/1000;
+		if(timeDiffSeconds > 300){//5mins
+			NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
+			return ;
+		}
 		
 		if(visited.contains(stmt))
 			return ;
@@ -558,7 +571,7 @@ public class ToolSet {
 		stack.add(stmt);
 		
 		while(!stack.isEmpty()){
-			timeDiffSeconds = (System.currentTimeMillis() - startingTime)/1000;
+			timeDiffSeconds = (System.currentTimeMillis() - cfgStartingTime)/1000;
 			if(timeDiffSeconds > 300){//5mins
 				NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
 				continue ;
@@ -793,7 +806,10 @@ public class ToolSet {
 	
 	
 	/*** Private methods ***/
-
+	private String findFiledRef(FieldRef fr){
+		return null;
+	}
+	
 	private static UnitGraph findMethodGraph(SootMethod method){
 		for (QueueReader<MethodOrMethodContext> rdr =
 				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
