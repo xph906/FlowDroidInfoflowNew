@@ -349,7 +349,8 @@ public class ToolSet {
 		// the variable we're looking for
 		if (stmt instanceof AssignStmt) {
 			AssignStmt assign = (AssignStmt) stmt;
-			if (assign.getLeftOp() == target) {
+			if (assign.getLeftOp() == target || 
+					((assign.getLeftOp() instanceof ArrayRef) && (((ArrayRef)assign.getLeftOp()).getBase()==target)) ) {
 				// ok, now find the new value from the right side
 				if (assign.getRightOp() instanceof StringConstant) {
 					return ((StringConstant) assign.getRightOp()).value;
@@ -365,10 +366,11 @@ public class ToolSet {
 					if(assign.getRightOp() instanceof StaticFieldRef){
 						StaticFieldRef sfr = (StaticFieldRef)(assign.getRightOp());
 						target = assign.getRightOp();
+						NUDisplay.debug("  TODO: search StaticFieldRef:" + sfr, "findLastResStringAssignment");
 					}
 					else if(assign.getRightOp() instanceof InstanceFieldRef){
 						InstanceFieldRef ifr = (InstanceFieldRef)(assign.getRightOp() );
-						
+						NUDisplay.debug("  TODO: search InstanceFieldRef:" + ifr, "findLastResStringAssignment");
 					}
 				} 
 				else if(assign.getRightOp() instanceof Local){
@@ -377,10 +379,68 @@ public class ToolSet {
 				else if(assign.getRightOp() instanceof CastExpr){
 					target = assign.getRightOp();
 				}
-				else if (assign.getRightOp()instanceof InvokeExpr) {
-					System.out.println("NULIST: TODO: findLastResStringAssignment right invoke expr:"+assign.getRightOp());
+				else if (assign.getRightOp() instanceof InvokeExpr) {
+					NUDisplay.debug("findLastResStringAssignment right invoke expr:"+assign.getRightOp(), null);
 					InvokeExpr ie = (InvokeExpr)assign.getRightOp();
-					return "<METHODCALL>:"+ie.getMethod().getSignature();
+					if(ie.getArgCount()==0 && ie.getMethod().hasActiveBody()){
+						UnitGraph g = new ExceptionalUnitGraph(ie.getMethod().getActiveBody());
+						GraphTool.displayGraph(g, ie.getMethod());
+						List<Unit> tails = g.getTails();
+						NUDisplay.debug("  Do inter-procedure analysis:"+ie.getMethod().getName()+" "+tails.size(), null);
+						for(Unit t : tails){
+							if(t instanceof RetStmt){//No use case
+								NUDisplay.alert("RetStmt shouldn't be here", "findLastResStringAssignment");
+							}
+							else if(t instanceof ReturnStmt){
+								ReturnStmt returnStmt = (ReturnStmt)t;
+								String subrs = findLastResStringAssignment((Stmt)t, returnStmt.getOp(), cfg, visited );
+								NUDisplay.debug("  ReturnVal:"+returnStmt.getOp()+ " resolve as:"+subrs, 
+										"findLastResStringAssignment");
+								if(subrs != null) return subrs;
+							}
+							else{
+								NUDisplay.debug("  unknown tail stmt:"+t.getClass(), "findLastResStringAssignment");
+							}
+						}
+					}
+					else if(ie.getMethod().getName().equals("format") && 
+							ie.getMethod().getDeclaringClass().getName().equals("java.lang.String")){
+						Value format = ie.getArg(0);
+						
+						StringBuilder sb = new StringBuilder();
+						if(format instanceof StringConstant)
+							sb.append(((StringConstant) format).value);
+						else{
+							visited.remove(stmt);
+							String tmp = findLastResStringAssignment(stmt, format, cfg, visited );
+							visited.add(stmt);
+							if(tmp != null)
+								sb.append(tmp);
+						}
+						NUDisplay.debug("  handling Sting.format's format:"+sb.toString(), "findLastResStringAssignment");
+						for(int i=1; i<ie.getArgCount(); i++){
+							Value val = ie.getArg(i);
+							sb.append(", ");
+							if(val instanceof StringConstant)
+								sb.append(((StringConstant) val).value);
+							else if(val instanceof Constant)
+								sb.append(val.toString());
+							else{
+								visited.remove(stmt);
+								String tmp = findLastResStringAssignment(stmt, val, cfg, visited );
+								visited.add(stmt);
+								if(tmp != null)
+									sb.append(tmp);
+							}
+						}
+						NUDisplay.debug("  handling Sting.format's value:"+sb.toString(), "findLastResStringAssignment");	
+						return sb.toString();
+					}
+					else{
+						NUDisplay.debug("  Cannot do inter-procedure analysis:"+ie.getMethod().getDeclaringClass().getName(), null);
+						return "<METHODCALL>:"+ie.getMethod().getSignature();
+					}
+					return null;
 				}
 			}
 			
