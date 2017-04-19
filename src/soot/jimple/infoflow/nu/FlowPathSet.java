@@ -163,7 +163,7 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				String key = ToolSet.findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				String key = ToolSet.findLastResStringAssignmentAccurate(stmt, v, icfg, new HashSet<Stmt>());
 				return key;
 			}
 		}
@@ -191,7 +191,7 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				String key = ToolSet.findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				String key = ToolSet.findLastResStringAssignmentAccurate(stmt, v, icfg, new HashSet<Stmt>());
 				return key;
 			}
 		}
@@ -219,7 +219,7 @@ public class FlowPathSet {
 				}
 			}
 			else{
-				String key = ToolSet.findLastResStringAssignment(stmt, v, icfg, new HashSet<Stmt>());
+				String key = ToolSet.findLastResStringAssignmentAccurate(stmt, v, icfg, new HashSet<Stmt>());
 				return key;				
 			}
 		}

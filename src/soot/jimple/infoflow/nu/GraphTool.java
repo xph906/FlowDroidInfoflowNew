@@ -7,6 +7,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.Stack;
 
 import soot.MethodOrMethodContext;
 import soot.Scene;
@@ -58,7 +59,7 @@ public class GraphTool {
 			System.out.println("  Display graph "+graphName+" to "+fileName);
 			writer = new PrintWriter(fileName, "UTF-8");
 		    
-			Queue<Pair<Unit, Integer>> queue = new java.util.concurrent.LinkedBlockingQueue<Pair<Unit, Integer>>();
+			Stack<Pair<Unit, Integer>> queue = new Stack<Pair<Unit, Integer>>();
 			Set<Unit> visitedUnits = new HashSet<Unit>();
 			writer.println("DisplayGraph: " + graphName);
 			for (Unit su : startingUnits) {
@@ -69,7 +70,7 @@ public class GraphTool {
 			}
 	
 			while (!queue.isEmpty()) {
-				Pair<Unit, Integer> item = queue.poll();
+				Pair<Unit, Integer> item = queue.pop();
 				String space = new String(new char[item.second * 2]).replace('\0', ' ');
 				writer.println(space + item.first + " ");
 				// if(item.second > 20)

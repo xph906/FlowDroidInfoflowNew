@@ -33,6 +33,7 @@ import soot.jimple.InstanceFieldRef;
 import soot.jimple.InstanceInvokeExpr;
 import soot.jimple.IntConstant;
 import soot.jimple.InvokeExpr;
+import soot.jimple.InvokeStmt;
 import soot.jimple.NewArrayExpr;
 import soot.jimple.NewExpr;
 import soot.jimple.NewMultiArrayExpr;
@@ -223,12 +224,18 @@ public class ToolSet {
 							resID = ((StringConstant) inv.getArg(1)).value;
 						if (inv.getArg(2) instanceof StringConstant)
 							packageName = ((StringConstant) inv.getArg(2)).value;
-						else if (inv.getArg(2) instanceof Local)
-							packageName = ToolSet.findLastResStringAssignment(stmt, (Local) inv.getArg(2), cfg, new HashSet<Stmt>());
+						else if (inv.getArg(2) instanceof Local){
+							List<String> tmp= ToolSet.findLastResStringAssignment(stmt, (Local) inv.getArg(2), cfg, new HashSet<Stmt>());
+							if(tmp!=null && tmp.size()>0)
+								packageName = tmp.get(0);
+						}
 						else {
 							if(inv.getArg(0) instanceof Local){
 								GraphTool.displayGraph(new ExceptionalUnitGraph(cfg.getMethodOf(assign).getActiveBody()), cfg.getMethodOf(assign));
-								String key = ToolSet.findLastResStringAssignment(stmt, (Local)inv.getArg(0), cfg,  new HashSet<Stmt>());
+								List<String> tmp = ToolSet.findLastResStringAssignment(stmt, (Local)inv.getArg(0), cfg,  new HashSet<Stmt>());
+								String key = null;
+								if(tmp!=null && tmp.size()>0)
+									key = tmp.get(0);
 								
 								if(key !=null && key.length()>0)
 									return resMgr.getResourceIdByName(key);
@@ -333,151 +340,510 @@ public class ToolSet {
 		}
 		return null;
 	}
-	
-	public static String findLastResStringAssignment(Stmt stmt, Value target, 
+	public static String findLastResStringAssignmentSingle(Stmt stmt, Value target, 
+			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited){
+		setCFGStartingTime();
+		List<String> rs = findLastResStringAssignment(stmt, target, cfg, visited);
+		
+		if(rs==null || rs.size()==0)
+			return null;
+		else{
+			StringBuilder sb = new StringBuilder();
+			for(String str : rs)
+				sb.append(str+", ");
+			return sb.toString();
+		}
+	}
+	public static String findLastResStringAssignmentAccurate(Stmt stmt, Value target, 
+			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited){
+		setCFGStartingTime();
+		List<String> rs = findLastResStringAssignment(stmt, target, cfg, visited);
+		if(rs==null || rs.size()==0)
+			return null;
+		else{
+			for(String str : rs)
+				if(!str.startsWith("[NUTAG]"))
+					return str;
+			return rs.get(0);
+		}
+	}
+	//String starts with [NUTAG] is created by us.
+	public static List<String> findLastResStringAssignment(Stmt stmt, Value target, 
 			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited) {
+		long timeDiffSeconds = (System.currentTimeMillis() - cfgStartingTime)/1000;
+		if(timeDiffSeconds > 300){//5mins
+			//NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
+			return new ArrayList<String>();
+		}
 		if(visited.contains(stmt)){
+			NUDisplay.error("visited", "findLastResStringAssignment");
 			return null;
 		}
-		visited.add(stmt);
-		
 		if(cfg == null) {
 			NUDisplay.error("findLastResIDAssignment cfg is not set.","findLastResStringAssignment");
 			return null;
 		}
+		boolean debug = false;
+		List<String> rs = new ArrayList<String>();
+		Queue<Stmt> queue = new LinkedList<Stmt>();
+		queue.add(stmt);
 		// If this is an assign statement, we need to check whether it changes
 		// the variable we're looking for
-		if (stmt instanceof AssignStmt) {
-			AssignStmt assign = (AssignStmt) stmt;
-			if (assign.getLeftOp() == target || 
-					((assign.getLeftOp() instanceof ArrayRef) && (((ArrayRef)assign.getLeftOp()).getBase()==target)) ) {
-				// ok, now find the new value from the right side
-				if (assign.getRightOp() instanceof StringConstant) {
-					return ((StringConstant) assign.getRightOp()).value;
-				} 
-				else if (assign.getRightOp() instanceof FieldRef) {
-					SootField field = ((FieldRef) assign.getRightOp()).getField();
-					for (Tag tag : field.getTags()){
-						if (tag instanceof StringConstantValueTag){
-							//System.out.println("This is an integerCOnstantValue");
-							return ((StringConstantValueTag) tag).getStringValue();
-						}
+		while(!queue.isEmpty()){
+			if(rs.size() > 20) 
+				return rs;
+			stmt = queue.poll();
+			//if(debug) NUDisplay.debug("DEBUG: "+stmt+" "+target+", "+visited.contains(stmt), null);
+			
+			if(visited.contains(stmt))
+				continue;
+			visited.add(stmt);
+			if (stmt instanceof AssignStmt) {
+				AssignStmt assign = (AssignStmt) stmt;
+				Value left = assign.getLeftOp();
+				if (assign.getLeftOp() == target || 
+						((left instanceof ArrayRef) && (((ArrayRef)left).getBase()==target)) ||
+						((target instanceof ArrayRef) && (((ArrayRef)target).getBase()==left)) ||
+						((left instanceof ArrayRef) &&  (target instanceof ArrayRef) && (((ArrayRef)target).getBase()==((ArrayRef)left).getBase()))) {
+					//NUDisplay.debug("  analyze stmt:"+stmt+" FOR["+target +"] @"+cfg.getMethodOf(stmt).getSignature(), "findLastResStringAssignment");
+					// ok, now find the new value from the right side
+					if (assign.getRightOp() instanceof StringConstant) {
+						rs.add(((StringConstant) assign.getRightOp()).value);
+						continue;
+					} 
+					else if(assign.getRightOp() instanceof AnyNewExpr){
+						//NUDisplay.debug("  *** target is new."+stmt, null);
+						continue;
 					}
-					if(assign.getRightOp() instanceof StaticFieldRef){
-						StaticFieldRef sfr = (StaticFieldRef)(assign.getRightOp());
+					else if(assign.getRightOp() instanceof ArrayRef){
 						target = assign.getRightOp();
-						NUDisplay.debug("  TODO: search StaticFieldRef:" + sfr, "findLastResStringAssignment");
 					}
-					else if(assign.getRightOp() instanceof InstanceFieldRef){
-						InstanceFieldRef ifr = (InstanceFieldRef)(assign.getRightOp() );
-						NUDisplay.debug("  TODO: search InstanceFieldRef:" + ifr, "findLastResStringAssignment");
+					else if (assign.getRightOp() instanceof FieldRef) {
+						Value v = findStringHelperHandleFieldRef((FieldRef)assign.getRightOp(), stmt, rs, cfg, visited);
+						if(v == null) 
+							continue;
+						else target = v;
+					} 
+					else if(assign.getRightOp() instanceof Local){
+						target = assign.getRightOp();
 					}
-				} 
-				else if(assign.getRightOp() instanceof Local){
-					target = assign.getRightOp();
-				}
-				else if(assign.getRightOp() instanceof CastExpr){
-					target = assign.getRightOp();
-				}
-				else if (assign.getRightOp() instanceof InvokeExpr) {
-					NUDisplay.debug("findLastResStringAssignment right invoke expr:"+assign.getRightOp(), null);
-					InvokeExpr ie = (InvokeExpr)assign.getRightOp();
-					if(ie.getArgCount()==0 && ie.getMethod().hasActiveBody()){
-						UnitGraph g = new ExceptionalUnitGraph(ie.getMethod().getActiveBody());
-						GraphTool.displayGraph(g, ie.getMethod());
-						List<Unit> tails = g.getTails();
-						NUDisplay.debug("  Do inter-procedure analysis:"+ie.getMethod().getName()+" "+tails.size(), null);
-						for(Unit t : tails){
-							if(t instanceof RetStmt){//No use case
-								NUDisplay.alert("RetStmt shouldn't be here", "findLastResStringAssignment");
+					else if(assign.getRightOp() instanceof CastExpr){
+						target = assign.getRightOp();
+					}
+					else if (assign.getRightOp() instanceof InvokeExpr) {
+						//NUDisplay.debug("  findLastResStringAssignment right invoke expr:"+assign, null);
+						InvokeExpr ie = (InvokeExpr)assign.getRightOp();
+						if(ie.getArgCount()==0 && ie.getMethod().hasActiveBody()){
+							findStringHelperHandleNonParamMethod(ie, rs, cfg, visited);
+							continue;
+						}
+						else if(ie.getMethod().getName().equals("format") && 
+								ie.getMethod().getDeclaringClass().getName().equals("java.lang.String")){
+							findStringHelperHandleFormatMethod(ie,stmt, rs, cfg, visited);
+							continue;
+						}
+						else if(ie.getMethod().getDeclaringClass().getName().equals("java.net.URL")){
+							try{
+								target = ((InstanceInvokeExpr)ie).getBase();
+								//debug = true;
+								//GraphTool.displayGraph(new ExceptionalUnitGraph(cfg.getMethodOf(assign).getActiveBody()), cfg.getMethodOf(assign));
 							}
-							else if(t instanceof ReturnStmt){
-								ReturnStmt returnStmt = (ReturnStmt)t;
-								String subrs = findLastResStringAssignment((Stmt)t, returnStmt.getOp(), cfg, visited );
-								NUDisplay.debug("  ReturnVal:"+returnStmt.getOp()+ " resolve as:"+subrs, 
-										"findLastResStringAssignment");
-								if(subrs != null) return subrs;
-							}
-							else{
-								NUDisplay.debug("  unknown tail stmt:"+t.getClass(), "findLastResStringAssignment");
+							catch(Exception e){
+								NUDisplay.alert("java.net.URL is not instance invoke expr:"+stmt, "findLastResStringAssignment");
 							}
 						}
-					}
-					else if(ie.getMethod().getName().equals("format") && 
-							ie.getMethod().getDeclaringClass().getName().equals("java.lang.String")){
-						Value format = ie.getArg(0);
-						
-						StringBuilder sb = new StringBuilder();
-						if(format instanceof StringConstant)
-							sb.append(((StringConstant) format).value);
+						else if(ie.getMethod().getName().equals("toString")){
+							try{
+								target = ((InstanceInvokeExpr)ie).getBase();
+								//debug = true;
+								//GraphTool.displayGraph(new ExceptionalUnitGraph(cfg.getMethodOf(assign).getActiveBody()), cfg.getMethodOf(assign));
+							}
+							catch(Exception e){
+								NUDisplay.alert("StringBuilder.toString is not instance invoke expr:"+stmt, "findLastResStringAssignment");
+								continue;
+							}
+						}
+						else if(ie.getMethod().getName().equals("append") &&
+								ie.getMethod().getDeclaringClass().getName().equals("java.lang.StringBuilder")){
+							findStringHelperHandleAppendMethod(ie,stmt, rs, cfg, visited);
+							continue;
+						}
+						else if(ie.getMethod().hasActiveBody()){
+							findStringHelperHandleRegularMethod(ie,stmt, rs, cfg, visited);
+							continue;
+						}
+						else if(!ie.getMethod().getReturnType().toString().equals("java.lang.String")){
+							NUDisplay.alert("ignore ie:"+ie.getMethod().getReturnType().toString(), null);
+							continue;
+						}
+						else if(ie.getMethod().getName().equals("encode") && ie.getArgCount()>0){
+							Value arg = ie.getArg(0);
+							if(arg instanceof StringConstant){
+								rs.add(((StringConstant) arg).value);
+								continue;
+							}
+							else if(arg instanceof Constant){
+								rs.add(arg.toString());
+								continue;
+							}
+							target = arg;
+						}
+						else if(ie.getMethod().getName().equals("toUpperCase") || ie.getMethod().getName().equals("toLowerCase")){
+							try{
+								target = ((InstanceInvokeExpr)ie).getBase();
+							}
+							catch(Exception e){
+								NUDisplay.alert("StringBuilder.toUpperCase/toLowerCase is not instance invoke expr:"+stmt, "findLastResStringAssignment");
+								continue;
+							}
+						}
+						else if(ie.getMethod().getDeclaringClass().getName().equals("org.apache.http.message.BasicNameValuePair")){
+							try{
+								target = ((InstanceInvokeExpr)ie).getBase();
+								NUDisplay.debug("Found a basicNameValuePair:"+ie, null);
+							}catch(Exception e){
+								continue;
+							}
+						}
 						else{
-							visited.remove(stmt);
-							String tmp = findLastResStringAssignment(stmt, format, cfg, visited );
-							visited.add(stmt);
-							if(tmp != null)
-								sb.append(tmp);
+							NUDisplay.alert("  string return val:"+ie.getMethod().getReturnType().toString(), null);
+							NUDisplay.debug("  Cannot do inter-procedure analysis:"+ie.getMethod().getSignature(), null);
+							rs.add("[NUTAG] <METHODCALL>:"+ie.getMethod().getSignature());
+							continue;
 						}
-						NUDisplay.debug("  handling Sting.format's format:"+sb.toString(), "findLastResStringAssignment");
-						for(int i=1; i<ie.getArgCount(); i++){
-							Value val = ie.getArg(i);
-							sb.append(", ");
-							if(val instanceof StringConstant)
-								sb.append(((StringConstant) val).value);
-							else if(val instanceof Constant)
-								sb.append(val.toString());
-							else{
-								visited.remove(stmt);
-								String tmp = findLastResStringAssignment(stmt, val, cfg, visited );
-								visited.add(stmt);
-								if(tmp != null)
-									sb.append(tmp);
+						
+					}//left==target and right is InvokeExpr
+				}
+				else if( (assign.getRightOp() instanceof InvokeExpr) && 
+						(assign.getInvokeExpr().getMethod().getName().equals("append")) &&
+						(assign.getInvokeExpr().getMethod().getDeclaringClass().getName().equals("java.lang.StringBuilder"))){
+					Value base = ((InstanceInvokeExpr)(assign.getInvokeExpr())).getBase();
+					if(base == target)
+						findStringHelperHandleAppendMethod(assign.getInvokeExpr(), stmt, rs, cfg, visited);
+				}
+			}
+			else if(stmt instanceof IdentityStmt){
+				IdentityStmt is = (IdentityStmt)stmt;
+				if(is.getLeftOp() == target){
+					//NUDisplay.debug("  IdentityStmt analyze stmt:"+stmt+" FOR["+target +"] @"+cfg.getMethodOf(stmt).getSignature(), "findLastResStringAssignment");
+					if(is.getRightOp() instanceof ParameterRef){
+						ParameterRef right = (ParameterRef)(is.getRightOp());
+						int idx = right.getIndex();
+						Collection<Unit> callers = cfg.getCallersOf(cfg.getMethodOf(stmt));
+						if(callers != null && callers.size()>0){
+							for(Unit caller : callers){
+								InvokeExpr ie = ((Stmt)caller).getInvokeExpr();
+								if(idx >= ie.getArgCount()) continue;
+								Value arg = ie.getArg(idx);
+								if(arg instanceof StringConstant)
+									rs.add(((StringConstant) arg).value);
+								else{
+									List<String> subrs = findLastResStringAssignment((Stmt) caller, arg, cfg, visited);
+									if(subrs != null){
+										for(String t : subrs)
+											rs.add(t);
+									}
+								}
 							}
 						}
-						NUDisplay.debug("  handling Sting.format's value:"+sb.toString(), "findLastResStringAssignment");	
-						return sb.toString();
 					}
-					else{
-						NUDisplay.debug("  Cannot do inter-procedure analysis:"+ie.getMethod().getDeclaringClass().getName(), null);
-						return "<METHODCALL>:"+ie.getMethod().getSignature();
-					}
-					return null;
 				}
+			}
+			else if(stmt instanceof InvokeStmt){
+				InvokeStmt is = (InvokeStmt)stmt;
+				InvokeExpr ie = is.getInvokeExpr();
+				if(ie.getMethod().getName().equals("append") &&
+						ie.getMethod().getDeclaringClass().getName().equals("java.lang.StringBuilder")){
+					Value base = ((InstanceInvokeExpr)(ie)).getBase();
+					if(base == target)
+						findStringHelperHandleAppendMethod(ie, stmt, rs, cfg, visited);
+				}
+				else if(ie.getMethod().getName().equals("<init>")){
+					try{
+						InstanceInvokeExpr iie = (InstanceInvokeExpr)ie;
+						Value base = iie.getBase();
+						if(base == target){
+							NUDisplay.debug("Dealing init method: "+stmt, null);
+							for(int i=0; i<iie.getArgCount(); i++){
+								if(iie.getMethod().getParameterType(i).toString().equals("java.lang.String")){
+									NUDisplay.debug("  Dealing string arg: "+i, null);
+									Value arg = iie.getArg(i);
+									List<Unit> preds = cfg.getPredsOf(stmt);
+									if(arg instanceof Constant){
+										rs.add(arg.toString());
+									}
+									else{
+										List<String> valStrs = null;
+										for(Unit pred : preds){
+											HashSet<Stmt> newVisited = new HashSet<Stmt>();
+											newVisited.addAll(visited);
+											valStrs = findLastResStringAssignment((Stmt)pred, arg, cfg, newVisited );
+											if(valStrs!=null && valStrs.size()>0){
+												rs.addAll(valStrs);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					catch(Exception e){ }
+				}
+			}
+	
+			// Continue the search upwards
+			List<Unit> preds = null;
+			if(cfg.getMethodOf(stmt).hasActiveBody()){
+				UnitGraph g = new ExceptionalUnitGraph(cfg.getMethodOf(stmt).getActiveBody());
+				preds = g.getPredsOf(stmt);
+			}
+			else
+				preds = cfg.getPredsOf(stmt);
+			
+			if(preds.size() >= 1 ){
+				Unit pred = preds.get(0);
+				if (!(pred instanceof Stmt))
+					continue;
+				if(visited.contains(pred))
+					continue;
+				queue.add((Stmt)pred);
+			}
+			for (int i=1; i<preds.size(); i++) {
+				Unit pred = preds.get(i);
+				if (!(pred instanceof Stmt))
+					continue;
+				if(visited.contains(pred))
+					continue;
+				
+				List<String> subrs = findLastResStringAssignment((Stmt) pred, target, cfg, visited);
+				if(subrs != null)
+					for(String t : subrs)
+						rs.add(t);
+			}
+		}
+		return rs;
+	}
+	private static void findStringHelperHandleNonParamMethod(InvokeExpr ie, List<String> rs, BiDiInterproceduralCFG<Unit, SootMethod>  cfg,
+			Set<Stmt> visited){
+		UnitGraph g = new ExceptionalUnitGraph(ie.getMethod().getActiveBody());
+		GraphTool.displayGraph(g, ie.getMethod());
+		List<Unit> tails = g.getTails();
+		//NUDisplay.debug("  Do inter-procedure analysis:"+ie.getMethod().getName()+" "+tails.size(), null);
+		for(Unit t : tails){
+			if(t instanceof ReturnStmt){
+				if(visited.contains(t)) continue;
+				ReturnStmt returnStmt = (ReturnStmt)t;
+//				NUDisplay.debug("    start", "findLastResStringAssignment");
+				List<String> subrs = findLastResStringAssignment((Stmt)t, returnStmt.getOp(), cfg, visited );
+//				NUDisplay.debug("    ReturnVal:"+returnStmt.getOp()+ " resolve as:"+subrs.size()+" strings "+cfg, 
+//						"findLastResStringAssignment");
+				if(subrs != null) rs.addAll(subrs);
+			}
+		}
+	}
+	private static void findStringHelperHandleRegularMethod(InvokeExpr ie, Stmt stmt, List<String> rs, BiDiInterproceduralCFG<Unit, SootMethod>  cfg,
+			Set<Stmt> visited){
+		UnitGraph g = new ExceptionalUnitGraph(ie.getMethod().getActiveBody());
+		GraphTool.displayGraph(g, ie.getMethod());
+		List<Unit> tails = g.getTails();
+//		NUDisplay.debug("  Do inter-procedure analysis:"+ie.getMethod().getName()+" "+tails.size(), null);
+		for(Unit t : tails){
+			if(t instanceof ReturnStmt){
+				if(visited.contains(t)) continue;
+				ReturnStmt returnStmt = (ReturnStmt)t;
+				//NUDisplay.debug("    start", "findLastResStringAssignment");
+				List<String> subrs = findLastResStringAssignment((Stmt)t, returnStmt.getOp(), cfg, visited );
+//				NUDisplay.debug("    ReturnVal:"+returnStmt.getOp()+ " resolve as:"+subrs.size()+" strings "+cfg, 
+//						"findLastResStringAssignment");
+				if(subrs != null) rs.addAll(subrs);
+			}
+		}
+		
+		if(ie.getArgCount() == 0)
+			return ;
+		for(Value arg : ie.getArgs()){
+			if(arg instanceof StringConstant){
+				rs.add(((StringConstant) arg).value);
+				continue;
+			}
+			else if(arg instanceof Constant)
+				continue;
+			
+			for(Unit pred : cfg.getPredsOf(stmt)){
+				HashSet<Stmt> newVisited = new HashSet<Stmt>();
+				newVisited.addAll(visited);
+				List<String> argStrs = findLastResStringAssignment((Stmt)pred, arg, cfg, newVisited );
+				if(argStrs==null || argStrs.size()==0)
+					continue;
+				for(String argVal : argStrs)
+					rs.add(argVal);
+			}
+		}
+		
+	}
+	private static void findStringHelperHandleAppendMethod(InvokeExpr ie, Stmt stmt, List<String> rs, BiDiInterproceduralCFG<Unit, SootMethod>  cfg,
+			Set<Stmt> visited){
+		try{
+			//handle base
+			Value base = ((InstanceInvokeExpr)ie).getBase();
+			List<String> baseStrs = null;
+			List<Unit> preds = cfg.getPredsOf(stmt);
+			for(Unit pred : preds){
+				HashSet<Stmt> newVisited = new HashSet<Stmt>();
+				newVisited.addAll(visited);
+				baseStrs = findLastResStringAssignment((Stmt)pred, base, cfg, newVisited );
+				//NUDisplay.debug("Found "+(baseStrs==null?"0":baseStrs.size())+" strs", null);
 			}
 			
-		}
-		else if(stmt instanceof IdentityStmt){
-			IdentityStmt is = (IdentityStmt)stmt;
-			if(is.getLeftOp() == target){
-				//System.out.println("From IdentityStmt: "+is);
-				if(is.getRightOp() instanceof ParameterRef){
-					ParameterRef right = (ParameterRef)(is.getRightOp());
-					int idx = right.getIndex();
-					Collection<Unit> callers = cfg.getCallersOf(cfg.getMethodOf(stmt));
-					if(callers != null && callers.size()>0){
-						for(Unit caller : callers){
-							InvokeExpr ie = ((Stmt)caller).getInvokeExpr();
-							if(idx >= ie.getArgCount()) continue;
-							Value arg = ie.getArg(idx);
-							if(arg instanceof StringConstant)
-								return ((StringConstant) arg).value;
-							else{
-								String lastAssignment = findLastResStringAssignment((Stmt) caller, arg, cfg, visited);
-								if (lastAssignment != null)
-									return lastAssignment;
-							}
+			//handle arg.
+			Value arg = ie.getArg(0);
+			//NUDisplay.debug("  ## start handling arg:"+arg, null);
+			if(arg instanceof Constant){
+				//NUDisplay.debug("    ** append arg is a constant:"+arg, null);
+				if(baseStrs==null || baseStrs.size()==0)
+					rs.add(arg.toString());
+				else{
+					for(String baseStr : baseStrs)
+						rs.add(baseStr+","+arg.toString());
+				}
+			}
+			else{
+				List<String> valStrs = null;
+				for(Unit pred : preds){
+					HashSet<Stmt> newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+//					NUDisplay.debug("    ** append arg is NOT a constant:"+arg, null);
+					valStrs = findLastResStringAssignment((Stmt)pred, arg, cfg, newVisited );
+					if(valStrs==null || valStrs.size()==0){
+						if(baseStrs!=null && baseStrs.size()>0)
+							rs.addAll(baseStrs);
+					}
+					else{
+						if(baseStrs==null || baseStrs.size()==0)
+							rs.addAll(valStrs);
+						else{
+							for(String baseStr : baseStrs)
+								for(String valStr : valStrs)
+									rs.add(baseStr+","+valStr);
 						}
 					}
 				}
+				
 			}
 		}
-
-		// Continue the search upwards
-		for (Unit pred : cfg.getPredsOf(stmt)) {
-			if (!(pred instanceof Stmt))
-				continue;
-			String lastAssignment = findLastResStringAssignment((Stmt) pred, target, cfg, visited);
-			if (lastAssignment != null)
-				return lastAssignment;
+		catch(Exception e){
+			NUDisplay.alert("StringBuilder.append is not instance invoke expr:"+stmt, "findLastResStringAssignment");
+		}
+	}
+	
+	private static void findStringHelperHandleFormatMethod(InvokeExpr ie, Stmt stmt, List<String> rs, BiDiInterproceduralCFG<Unit, SootMethod>  cfg,
+			Set<Stmt> visited){
+		Value format = ie.getArg(0);
+		List<String> bases = new ArrayList<String>();
+		List<Unit> preds = cfg.getPredsOf(stmt);
+		if(format instanceof StringConstant)
+			rs.add(((StringConstant) format).value+" ");
+		else{
+			List<String> subvals = null;
+			for(Unit pred : preds){
+				HashSet<Stmt> newVisited = new HashSet<Stmt>();
+				newVisited.addAll(visited);
+				subvals = findLastResStringAssignment((Stmt)pred, format, cfg, newVisited );
+				if(subvals != null){
+					for(String v : subvals)
+						rs.add(v);
+				}
+			}
+		}
+		
+		NUDisplay.debug("  handling Sting.format's format:"+bases.size(), "findLastResStringAssignment");
+		List<String> vals = new ArrayList<String>();
+		for(int i=1; i<ie.getArgCount(); i++){
+			Value val = ie.getArg(i);
+			if(val instanceof StringConstant)
+				vals.add(((StringConstant) val).value);
+			else if(val instanceof Constant)
+				vals.add(val.toString());
+			else{
+				List<String> subvals = null;
+				for(Unit pred : preds){
+					HashSet<Stmt> newVisited = new HashSet<Stmt>();
+					newVisited.addAll(visited);
+					subvals = findLastResStringAssignment((Stmt)pred, val, cfg, newVisited );
+					if(subvals != null){
+						for(String v : subvals)
+							vals.add(v);
+					}
+				}	
+			}
+		}
+		if(bases.size() > 0){
+			if(vals.size() > 0)
+				for(String base : bases)
+					for(String val : vals)
+						rs.add(base+","+val);
+			else
+				rs.addAll(bases);
+		}
+		else 
+			rs.addAll(vals);
+		
+		NUDisplay.debug("  handling Sting.format's value:"+rs.size()+" strings", "findLastResStringAssignment");
+	}
+	
+	private static Value findStringHelperHandleFieldRef(FieldRef fr, Stmt stmt, List<String> rs, BiDiInterproceduralCFG<Unit, SootMethod>  cfg,
+			Set<Stmt> visitedStmts){
+		
+		SootField field = (fr).getField();
+		boolean flag = false;
+		for (Tag tag : field.getTags()){
+			if (tag instanceof StringConstantValueTag){
+				rs.add(((StringConstantValueTag) tag).getStringValue());
+				flag = true;
+			}
+		}
+		if(flag) return null;
+		
+		if(fr instanceof StaticFieldRef  || fr instanceof InstanceFieldRef){
+			List<Stmt> fieldDefs = findFiledRef(fr);
+			if(fieldDefs.size() == 0){
+				rs.add("[NUTAG] <CLASSFIELD>"+fr.getField().getDeclaringClass().getName()+"."+fr.getField().getName());
+				return null;
+			}
+			HashSet<Value> visited = new HashSet<Value>();
+			Queue<Stmt> queue = new LinkedList<Stmt>();
+			for(Stmt def : fieldDefs)
+				queue.add(def);
+//			NUDisplay.debug("In findStringHelperHandleFieldRef", null);
+			while(!queue.isEmpty()){
+				Stmt def = queue.poll();
+				AssignStmt asDef = (AssignStmt)def;
+				Value right = asDef.getRightOp();
+				if(visited.contains(right)) continue;
+				visited.add(right);
+				NUDisplay.debug("  field ref defined at:" + def, "findLastResStringAssignment");
+//				NUDisplay.debug("  "+right+" V:"+visited.contains(right), null);
+				if(right instanceof StringConstant)
+					rs.add(((StringConstant) right).value);
+				else if(right instanceof Constant)
+					rs.add(right.toString());
+				else if(right instanceof ArrayRef){
+					return right;
+				}
+				else if(right instanceof FieldRef){
+					fieldDefs = findFiledRef((FieldRef)right);
+					for(Stmt d : fieldDefs)
+						queue.add(d);
+				}
+				else{
+//					Set<Stmt> visited2 = new HashSet<Stmt>();
+//					visited2.add(stmt);
+					List<String> ret = findLastResStringAssignment(def, right, cfg, visitedStmts);
+					if(ret != null) 
+						rs.addAll(ret);
+				}
+			}
+			return null;
 		}
 		return null;
 	}
@@ -616,7 +982,7 @@ public class ToolSet {
 			BiDiInterproceduralCFG<Unit, SootMethod> cfg, Set<Stmt> visited, Set<Stmt> rs){
 		long timeDiffSeconds = (System.currentTimeMillis() - cfgStartingTime)/1000;
 		if(timeDiffSeconds > 300){//5mins
-			NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
+			//NUDisplay.error("passed time diff findViewDefStmt: "+timeDiffSeconds, null);
 			return ;
 		}
 		
@@ -633,10 +999,9 @@ public class ToolSet {
 		while(!stack.isEmpty()){
 			timeDiffSeconds = (System.currentTimeMillis() - cfgStartingTime)/1000;
 			if(timeDiffSeconds > 300){//5mins
-				NUDisplay.error("passed time diff: "+timeDiffSeconds, null);
-				continue ;
+				//NUDisplay.error("passed time diff findViewDefStmt2: "+timeDiffSeconds, null);
+				return;
 			}
-			
 			stmt = stack.pop();
 			visited.add(stmt);
 			
@@ -866,8 +1231,45 @@ public class ToolSet {
 	
 	
 	/*** Private methods ***/
-	private String findFiledRef(FieldRef fr){
-		return null;
+	private static List<Stmt> findFiledRef(FieldRef fr){
+		List<Stmt> rs = new ArrayList<Stmt>();
+		for (QueueReader<MethodOrMethodContext> rdr =
+				Scene.v().getReachableMethods().listener(); rdr.hasNext(); ) {
+			SootMethod m = rdr.next().method();
+			if(!m.hasActiveBody()) continue;
+			
+			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
+		    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
+		    for (Unit u : orderer.newList(g, false)) {
+		    	Stmt s = (Stmt)u;
+		    	if(s instanceof AssignStmt){
+		    		AssignStmt as = (AssignStmt)s;
+		    		Value left = as.getLeftOp();
+		    		if(fr instanceof StaticFieldRef){
+		    			StaticFieldRef sfr = (StaticFieldRef)fr;
+		    			if(left instanceof StaticFieldRef){
+		    				
+		    				if(sfr.getField().getName().equals(((StaticFieldRef) left).getField().getName()) &&
+		    						sfr.getField().getDeclaringClass().getName().equals(
+		    								((StaticFieldRef) left).getField().getDeclaringClass().getName())){
+		    					rs.add(s);
+		    				}
+		    			}
+		    		}
+		    		else if(fr instanceof InstanceFieldRef){
+		    			InstanceFieldRef ifr = (InstanceFieldRef)fr;
+		    			if(left instanceof InstanceFieldRef){
+		    				if(ifr.getField().getName().equals(((InstanceFieldRef) left).getField().getName()) &&
+		    						ifr.getField().getDeclaringClass().getName().equals(
+		    								((InstanceFieldRef) left).getField().getDeclaringClass().getName())){
+		    					rs.add(s);
+		    				}
+		    			}
+		    		}
+		    	}
+		    }
+		 }
+		return rs;
 	}
 	
 	private static UnitGraph findMethodGraph(SootMethod method){

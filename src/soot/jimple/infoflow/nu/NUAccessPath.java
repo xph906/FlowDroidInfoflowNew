@@ -126,10 +126,10 @@ public class NUAccessPath {
 			addValueToPath(ce.getOp(),curpath);
 		}
 		else if(v instanceof Expr){
-			System.out.println("addValueToPath type error(expr): "+v);
+		//	System.out.println("addValueToPath type error(expr): "+v);
 		}
 		else{
-			System.out.println("addValueToPath type error(unknown): "+v);
+		//	System.out.println("addValueToPath type error(unknown): "+v);
 		}
 	}
 	
