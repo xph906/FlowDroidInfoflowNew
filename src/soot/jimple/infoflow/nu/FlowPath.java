@@ -1,6 +1,7 @@
 package soot.jimple.infoflow.nu;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,6 +50,7 @@ public class FlowPath {
 	private Set<String> lifeCycleEventListenerSet = null;
 	private Map<String, List<Stmt>> registryMap = null;
 	private Set<String> declaringClassSet = null;
+	private Set<String> allRelatedClassSet = null;
 	private Set<String> allTrigerMethodSet = null;
 	
 	private IInfoflowCFG icfg;
@@ -146,6 +148,9 @@ public class FlowPath {
 	public Set<String> getDeclaringClassSet() {
 		return declaringClassSet;
 	}
+	public Set<String> getAllRelatedClassSet(){
+		return allRelatedClassSet;
+	}
 	public ResultSinkInfo getSink() {
 		return sink;	
 	}
@@ -184,7 +189,38 @@ public class FlowPath {
 			pathStmtMap.put(buildStmtSignature(s, icfg), s);
 			NUDisplay.debug("    "+icfg.getMethodOf(s).getName()+":"+s, null);
 		}
+		for(String cls : declaringClassSet){
+			NUDisplay.debug("  Declaring Class: "+cls, null);
+		}
+		NUDisplay.debug("", null);
+		allRelatedClassSet = findInvolvedClass(fullPath);
+		for(String cls : allRelatedClassSet){
+			NUDisplay.debug("  All Class: "+cls, null);
+		}
 		NUDisplay.debug("Done FlowPath: "+source.getSource()+"=>"+sink.getSink(), null);
+	}
+	
+	private Set<String> findInvolvedClass(List<Stmt> path){
+		Set<String> rs = new HashSet<String>();
+		for(Stmt stmt : path){
+			//SootMethod sm = icfg.getMethodOf(stmt);
+			//rs.add(sm.getDeclaringClass().getName());
+			Queue<Stmt> queue = new LinkedList<Stmt>();
+			queue.add(stmt);
+			Set<Stmt> visited = new HashSet<Stmt>();
+			while(!queue.isEmpty()){
+				Stmt s = queue.poll();
+				if(visited.contains(s))
+					continue;
+				visited.add(s);
+				SootMethod sm = icfg.getMethodOf(stmt);
+				rs.add(sm.getDeclaringClass().getName());
+				Collection<Unit> callers = icfg.getCallersOf(sm);
+				for(Unit caller : callers)
+					queue.add((Stmt)caller);
+			}
+		}
+		return rs;
 	}
 	
 	private List<Stmt> findActivationStmts(Stmt[] path){

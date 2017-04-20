@@ -9,6 +9,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
 
+import nu.NUDisplay;
 import soot.MethodOrMethodContext;
 import soot.Scene;
 import soot.SootMethod;
@@ -45,6 +46,7 @@ public class GraphTool {
 			SootMethod m = rdr.next().method();
 			if(!m.hasActiveBody())
 				continue;
+		
 			UnitGraph g = new ExceptionalUnitGraph(m.getActiveBody());
 			displayGraph(g,m);
 		}

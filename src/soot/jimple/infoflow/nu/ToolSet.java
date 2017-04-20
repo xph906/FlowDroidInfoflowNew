@@ -442,7 +442,8 @@ public class ToolSet {
 							findStringHelperHandleFormatMethod(ie,stmt, rs, cfg, visited);
 							continue;
 						}
-						else if(ie.getMethod().getDeclaringClass().getName().equals("java.net.URL")){
+						else if(ie.getMethod().getDeclaringClass().getName().equals("java.net.URL") ||
+								ie.getMethod().getDeclaringClass().getName().equals("android.net.Uri")){
 							try{
 								target = ((InstanceInvokeExpr)ie).getBase();
 								//debug = true;
@@ -821,7 +822,7 @@ public class ToolSet {
 				Value right = asDef.getRightOp();
 				if(visited.contains(right)) continue;
 				visited.add(right);
-				NUDisplay.debug("  field ref defined at:" + def, "findLastResStringAssignment");
+//				NUDisplay.debug("  field ref defined at:" + def, "findLastResStringAssignment");
 //				NUDisplay.debug("  "+right+" V:"+visited.contains(right), null);
 				if(right instanceof StringConstant)
 					rs.add(((StringConstant) right).value);
