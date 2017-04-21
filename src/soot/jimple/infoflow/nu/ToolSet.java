@@ -350,7 +350,8 @@ public class ToolSet {
 		else{
 			StringBuilder sb = new StringBuilder();
 			for(String str : rs)
-				sb.append(str+", ");
+				if(!str.startsWith("[NUTAG]"))
+					sb.append(str+", ");
 			return sb.toString();
 		}
 	}
@@ -431,7 +432,7 @@ public class ToolSet {
 						target = assign.getRightOp();
 					}
 					else if (assign.getRightOp() instanceof InvokeExpr) {
-						//NUDisplay.debug("  findLastResStringAssignment right invoke expr:"+assign, null);
+						NUDisplay.debug("  findLastResStringAssignment right invoke expr:"+assign, null);
 						InvokeExpr ie = (InvokeExpr)assign.getRightOp();
 						if(ie.getArgCount()==0 && ie.getMethod().hasActiveBody()){
 							findStringHelperHandleNonParamMethod(ie, rs, cfg, visited);
@@ -441,6 +442,35 @@ public class ToolSet {
 								ie.getMethod().getDeclaringClass().getName().equals("java.lang.String")){
 							findStringHelperHandleFormatMethod(ie,stmt, rs, cfg, visited);
 							continue;
+						}
+						else if((ie.getMethod().getName().equals("replace") ||
+								ie.getMethod().getName().equals("replaceAll") || 
+								ie.getMethod().getName().equals("replaceFirst")) && 
+								ie.getMethod().getDeclaringClass().getName().equals("java.lang.String")){
+							try{
+								target = ((InstanceInvokeExpr)ie).getBase();
+								Value arg = ie.getArg(1);
+								if(arg instanceof Constant)
+									rs.add(arg.toString());
+								else{
+									Set<Stmt> newVisited = new HashSet<Stmt>();
+									newVisited.addAll(visited);
+									for (Unit pred : cfg.getPredsOf(assign)) {
+										if (!(pred instanceof Stmt))
+											continue;
+										if(visited.contains(pred))
+											continue;
+										
+										List<String> subrs = findLastResStringAssignment((Stmt) pred, arg, cfg, newVisited);
+										if(subrs != null)
+											for(String t : subrs)
+												rs.add(t);
+									}
+								}
+							}
+							catch(Exception e){
+								NUDisplay.alert("java.net.URL is not instance invoke expr:"+stmt, "findLastResStringAssignment");
+							}
 						}
 						else if(ie.getMethod().getDeclaringClass().getName().equals("java.net.URL") ||
 								ie.getMethod().getDeclaringClass().getName().equals("android.net.Uri")){
@@ -501,14 +531,14 @@ public class ToolSet {
 						else if(ie.getMethod().getDeclaringClass().getName().equals("org.apache.http.message.BasicNameValuePair")){
 							try{
 								target = ((InstanceInvokeExpr)ie).getBase();
-								NUDisplay.debug("Found a basicNameValuePair:"+ie, null);
+//								NUDisplay.debug("Found a basicNameValuePair:"+ie, null);
 							}catch(Exception e){
 								continue;
 							}
 						}
 						else{
-							NUDisplay.alert("  string return val:"+ie.getMethod().getReturnType().toString(), null);
-							NUDisplay.debug("  Cannot do inter-procedure analysis:"+ie.getMethod().getSignature(), null);
+//							NUDisplay.alert("  string return val:"+ie.getMethod().getReturnType().toString(), null);
+//							NUDisplay.debug("  Cannot do inter-procedure analysis:"+ie, null);
 							rs.add("[NUTAG] <METHODCALL>:"+ie.getMethod().getSignature());
 							continue;
 						}
@@ -822,8 +852,8 @@ public class ToolSet {
 				Value right = asDef.getRightOp();
 				if(visited.contains(right)) continue;
 				visited.add(right);
-//				NUDisplay.debug("  field ref defined at:" + def, "findLastResStringAssignment");
-//				NUDisplay.debug("  "+right+" V:"+visited.contains(right), null);
+				NUDisplay.debug("  field ref defined at:" + def, "findLastResStringAssignment");
+				
 				if(right instanceof StringConstant)
 					rs.add(((StringConstant) right).value);
 				else if(right instanceof Constant)
@@ -832,6 +862,7 @@ public class ToolSet {
 					return right;
 				}
 				else if(right instanceof FieldRef){
+					NUDisplay.debug("    gotoField:"+right, null);
 					fieldDefs = findFiledRef((FieldRef)right);
 					for(Stmt d : fieldDefs)
 						queue.add(d);
@@ -839,6 +870,7 @@ public class ToolSet {
 				else{
 //					Set<Stmt> visited2 = new HashSet<Stmt>();
 //					visited2.add(stmt);
+					NUDisplay.debug("    gotoSTMT:"+right+" "+def, null);
 					List<String> ret = findLastResStringAssignment(def, right, cfg, visitedStmts);
 					if(ret != null) 
 						rs.addAll(ret);
@@ -1253,6 +1285,7 @@ public class ToolSet {
 		    				if(sfr.getField().getName().equals(((StaticFieldRef) left).getField().getName()) &&
 		    						sfr.getField().getDeclaringClass().getName().equals(
 		    								((StaticFieldRef) left).getField().getDeclaringClass().getName())){
+		    					System.out.println("DEBUGField:"+fr+" "+s);
 		    					rs.add(s);
 		    				}
 		    			}
@@ -1263,6 +1296,7 @@ public class ToolSet {
 		    				if(ifr.getField().getName().equals(((InstanceFieldRef) left).getField().getName()) &&
 		    						ifr.getField().getDeclaringClass().getName().equals(
 		    								((InstanceFieldRef) left).getField().getDeclaringClass().getName())){
+		    					System.out.println("DEBUGField:"+fr+" "+s);
 		    					rs.add(s);
 		    				}
 		    			}

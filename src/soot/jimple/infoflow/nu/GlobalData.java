@@ -13,6 +13,7 @@ import heros.InterproceduralCFG;
 import soot.SootField;
 import soot.SootMethod;
 import soot.Unit;
+import soot.jimple.InvokeExpr;
 import soot.jimple.Stmt;
 import soot.jimple.infoflow.solver.cfg.IInfoflowCFG;
 import soot.jimple.toolkits.ide.icfg.BiDiInterproceduralCFG;
@@ -42,8 +43,25 @@ public class GlobalData {
 			new HashMap<String, Integer>();
 	final private Map<String, Set<String>> internetURLAddrMap = 
 			new HashMap<String, Set<String>>();
+	private final Map<String, Set<String>> clsStringMap = 
+			new HashMap<String, Set<String>>();
 	private boolean allowSensitiveUISourceUpdate = true;
 	
+	public void addStringToCls(String clsName, String texts){
+		if(clsStringMap.containsKey(clsName))
+			clsStringMap.get(clsName).add(texts.trim());
+		else{
+			Set<String> set = new HashSet<String>();
+			set.add(texts.trim());
+			clsStringMap.put(clsName, set);
+		}
+	}
+	public Set<String> getClsStrings(String clsName){
+		return clsStringMap.get(clsName);
+	}
+	public Set<String> getClsNameWithStrings(){
+		return clsStringMap.keySet();
+	}
 	
 	public static String getFieldKey(SootField sf){
 		return sf.getDeclaringClass() + "@" + sf.getName()+"@"+sf.getType();
@@ -117,6 +135,13 @@ public class GlobalData {
 		String sig = ToolSet.createStmtSignature(stmt, null);
 		boolean rs = sensitiveUISource.contains(sig);
 		if(rs) NUDisplay.debug("isSensitiveUISource: "+stmt+" YES", null);
+		else {
+			if(stmt.containsInvokeExpr()){
+				InvokeExpr ie = stmt.getInvokeExpr();
+				if(ie.getMethod().getName().equals("findViewById"))
+					rs = true;
+			}
+		}
 		return rs;
 	}
 	
