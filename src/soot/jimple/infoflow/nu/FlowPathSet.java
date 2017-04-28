@@ -462,6 +462,7 @@ public class FlowPathSet {
 					FlowPath fp = new FlowPath(source, sink);
 					fp.setId(lst.size());
 					lst.add(fp);
+					addedFlowSet.add(fp.getSignature());
 				}
 			}
 		}
@@ -474,6 +475,7 @@ public class FlowPathSet {
 					FlowPath fp = new FlowPath(source, sink);
 					fp.setId(lst.size());
 					lst.add(fp);
+					addedFlowSet.add(fp.getSignature());
 				}
 			}
 		}
@@ -486,6 +488,7 @@ public class FlowPathSet {
 					FlowPath fp = new FlowPath(source, sink);
 					fp.setId(lst.size());
 					lst.add(fp);
+					addedFlowSet.add(fp.getSignature());
 				}
 			}
 		}
