@@ -45,8 +45,18 @@ public class GlobalData {
 			new HashMap<String, Set<String>>();
 	private final Map<String, Set<String>> clsStringMap = 
 			new HashMap<String, Set<String>>();
+	
+	private final Map<String, Integer> unsolvedViewStmtFlowIdMap = 
+			new HashMap<String, Integer>();
+	private final Set<String> classWithUnsolvedLayoutSet = 
+			new HashSet<String>();
+	
+	
 	private boolean allowSensitiveUISourceUpdate = true;
 	
+	public void addUnsolvedViewStmtFlowIdMap(String signature, Integer flowId){
+		unsolvedViewStmtFlowIdMap.put(signature, flowId);
+	}
 	public void addStringToCls(String clsName, String texts){
 		if(clsStringMap.containsKey(clsName))
 			clsStringMap.get(clsName).add(texts.trim());
@@ -55,6 +65,9 @@ public class GlobalData {
 			set.add(texts.trim());
 			clsStringMap.put(clsName, set);
 		}
+	}
+	public Map<String, Integer> getUnsolvedViewStmtFlowIdMap(){
+		return unsolvedViewStmtFlowIdMap;
 	}
 	public Set<String> getClsStrings(String clsName){
 		return clsStringMap.get(clsName);
@@ -152,7 +165,12 @@ public class GlobalData {
 	public Integer getFieldID(SootField sf){
 		return fieldIDMap.get(getFieldKey(sf));
 	}
-	
+	public void addClassWithUnsolvedLayout(String clsName){
+		this.classWithUnsolvedLayoutSet.add(clsName);
+	}
+	public Set<String> getClassWtihUnsolvedLayoutSet(){
+		return this.classWithUnsolvedLayoutSet;
+	}
 	public void addLayoutID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){
 		SootMethod sm = icfg.getMethodOf(stmt);
 		layoutIDMap.put(sm.getDeclaringClass().getName(), id);

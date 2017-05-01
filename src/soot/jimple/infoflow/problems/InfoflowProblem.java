@@ -57,6 +57,7 @@ import soot.jimple.infoflow.data.AccessPathFactory;
 import soot.jimple.infoflow.handlers.TaintPropagationHandler.FlowFunctionType;
 import soot.jimple.infoflow.nu.FlowPath;
 import soot.jimple.infoflow.nu.FlowPathSet;
+import soot.jimple.infoflow.nu.GlobalData;
 import soot.jimple.infoflow.problems.rules.PropagationRuleManager;
 import soot.jimple.infoflow.solver.functions.SolverCallFlowFunction;
 import soot.jimple.infoflow.solver.functions.SolverCallToReturnFlowFunction;
@@ -151,6 +152,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 
 			//taint and correlate view and flow
 			if(doTaint){
+				GlobalData gData = GlobalData.getInstance();
 				//for findViewById or New Widget
 				Abstraction taintSource = source;
 				Integer intVal = null;
@@ -159,7 +161,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				sb.append("FlowID:");
 				for(int flowId : lfp)
 					sb.append(flowId+",");
-				
+				String findViewByIdSignature = null;
 				while(taintSource!=null){	
 					intVal = FlowPathSet.getViewIdFromStmt(taintSource.getCurrentStmt());
 					if(intVal !=null){
@@ -172,6 +174,9 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 							if(ds.getRightOp() instanceof NewExpr){
 								initStmt = taintSource.getCurrentStmt();
 								break;
+							}
+							if(ds.containsInvokeExpr() && ds.getInvokeExpr().getMethod().getName().equals("findViewById")){
+								findViewByIdSignature = fps.getStmtSignatureForDynamicCombination(ds);
 							}
 						}
 					}
@@ -186,6 +191,12 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 				else if(initStmt != null){
 					for(int flowId : lfp)
 						fps.addViewFlowMapping(flowId, initStmt);
+				}
+				else if(findViewByIdSignature != null){
+					for(int flowId : lfp){
+						gData.addUnsolvedViewStmtFlowIdMap(findViewByIdSignature, flowId);
+						NUDisplay.debug("  DYNAMICCOMBINE:"+(Stmt)src+" ||FlowID"+flowId+" -"+findViewByIdSignature, "taintFlow");
+					}
 				}
 				
 				//for Preference

@@ -20,6 +20,7 @@ import heros.InterproceduralCFG;
 //import nu.NUDisplay;
 import soot.Local;
 import soot.MethodOrMethodContext;
+import soot.PatchingChain;
 import soot.Scene;
 import soot.SootField;
 import soot.SootMethod;
@@ -82,6 +83,27 @@ public class FlowPathSet {
 	static private IInfoflowCFG icfg ;
 	static public void setCFG(IInfoflowCFG cfg){
 		icfg = cfg;
+	}
+	static public IInfoflowCFG getCFG(){
+		return icfg;
+	}
+	static public String getStmtSignatureForDynamicCombination(Stmt stmt){
+		if(icfg == null){
+			NUDisplay.error("icfg is null!"+stmt, "getStmtSignatureForDynamicCombination");
+			return stmt.toString();
+		}
+		SootMethod sm = icfg.getMethodOf(stmt);
+		if(sm.hasActiveBody()){
+			PatchingChain<Unit> units = sm.getActiveBody().getUnits();
+			int cnt = 0;
+			for(Unit unit : units){
+				if(unit == stmt)
+					return stmt.toString()+"@"+sm.getSignature()+"@"+cnt;
+				cnt++;
+			}
+			NUDisplay.error("this stmt not exists!"+stmt+"@"+sm.getSignature(), "getStmtSignatureForDynamicCombination");
+		}
+		return stmt.toString()+"@"+sm.getSignature();
 	}
 	
 	/*** Methods to extract value from Stmts ***/
