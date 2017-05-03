@@ -78,6 +78,13 @@ public class ToolSet {
 		resMgr = mgr;
 	}
 	
+	public static String createStmtSignatureWithMethod(Stmt stmt, SootMethod sm){
+		if(sm == null) 
+			return stmt.toString() + "@null";
+		else
+			return stmt.toString()+"@"+sm.getSignature();
+	}
+	
 	public static String createStmtSignature(Stmt stmt, IInfoflowCFG cfg){
 		if(cfg == null) cfg = savedCFG;
 		if(cfg == null) return stmt.toString()+"@null";
@@ -85,9 +92,8 @@ public class ToolSet {
 		SootMethod curMethod = cfg.getMethodOf(stmt);
 		if(curMethod == null)
 			return stmt.toString()+"@null";
-		else
-			return stmt.toString()+"@"+curMethod.getSignature();
 		
+		return createStmtSignatureWithMethod(stmt, curMethod);
 //		if(cfg == null)
 //			cfg = savedCFG;
 //		if(cfg == null){
@@ -139,6 +145,30 @@ public class ToolSet {
 				}
 			}
 		}
+		return false;
+	}
+	
+	public static boolean isInternetSinkStmt(Stmt s){
+		if(!s.containsInvokeExpr())
+			return false;
+		InvokeExpr ie = s.getInvokeExpr();
+		String clsName = null;
+		SootMethod sm = null;
+		try{
+			sm = ie.getMethod();
+			clsName = sm.getDeclaringClass().getName();
+		}
+		catch(Exception e){
+			NUDisplay.error(e.toString(),"isInternetSinkStmt");
+		}
+		if(sm==null || clsName==null)
+			return false;
+		if(clsName.equals("org.apache.http.impl.client.DefaultHttpClient") && sm.getName().equals("execute"))
+			return true;
+		else if(clsName.equals("org.apache.http.client.HttpClient") && sm.getName().equals("execute"))
+			return true;
+		else if(clsName.equals("java.net.URL") && sm.getName().equals("<init>"))
+			return true;
 		return false;
 	}
 
@@ -1583,7 +1613,7 @@ public class ToolSet {
 		    	if(s.containsInvokeExpr()){
 		    		InvokeExpr ie = s.getInvokeExpr();
 		    		if(ie.getMethod().getName().contains("<init>")){
-		    			set.add(ToolSet.createStmtSignature(s, null));
+		    			set.add(ToolSet.createStmtSignatureWithMethod(s, ie.getMethod()));
 		    		}
 		    	}
 		    }
@@ -1608,7 +1638,7 @@ public class ToolSet {
 		    	cnt2++;
 		    	if(s.containsInvokeExpr()){
 		    		InvokeExpr ie = s.getInvokeExpr();
-		    		String sig = ToolSet.createStmtSignature(s, null);
+		    		String sig = ToolSet.createStmtSignatureWithMethod(s, ie.getMethod());
 		    		if(ie.getMethod().getName().contains("<init>")){
 		    			if(testx.contains(sig)) cnt++;
 		    			else {

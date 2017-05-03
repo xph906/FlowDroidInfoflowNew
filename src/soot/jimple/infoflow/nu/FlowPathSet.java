@@ -87,12 +87,18 @@ public class FlowPathSet {
 	static public IInfoflowCFG getCFG(){
 		return icfg;
 	}
-	static public String getStmtSignatureForDynamicCombination(Stmt stmt){
-		if(icfg == null){
-			NUDisplay.error("icfg is null!"+stmt, "getStmtSignatureForDynamicCombination");
+	//TODO: another version of stmt signature is at ToolSet.
+	//find a better one and use it instead.
+	static public String getStmtSignatureForDynamicCombination(Stmt stmt, SootMethod sm){
+//		if(icfg == null){
+//			NUDisplay.error("icfg is null!"+stmt+"@"+sm.getSignature(), "getStmtSignatureForDynamicCombination");
+//			return stmt.toString();
+//		}
+//		SootMethod sm = icfg.getMethodOf(stmt);
+		if(sm == null){
+			NUDisplay.error("sootmethod is null!"+stmt, "getStmtSignatureForDynamicCombination");
 			return stmt.toString();
 		}
-		SootMethod sm = icfg.getMethodOf(stmt);
 		if(sm.hasActiveBody()){
 			PatchingChain<Unit> units = sm.getActiveBody().getUnits();
 			int cnt = 0;
@@ -104,6 +110,7 @@ public class FlowPathSet {
 			NUDisplay.error("this stmt not exists!"+stmt+"@"+sm.getSignature(), "getStmtSignatureForDynamicCombination");
 		}
 		return stmt.toString()+"@"+sm.getSignature();
+//		return ToolSet.createStmtSignatureWithMethod(stmt, sm);
 	}
 	
 	/*** Methods to extract value from Stmts ***/

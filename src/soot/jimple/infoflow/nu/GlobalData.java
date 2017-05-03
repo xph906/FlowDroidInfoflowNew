@@ -50,7 +50,8 @@ public class GlobalData {
 			new HashMap<String, Integer>();
 	private final Set<String> classWithUnsolvedLayoutSet = 
 			new HashSet<String>();
-	
+	private final Map<String, String> unsolvedURLSinkOriginalStmtMap = 
+			new HashMap<String, String>();
 	
 	private boolean allowSensitiveUISourceUpdate = true;
 	
@@ -97,8 +98,15 @@ public class GlobalData {
 		this.allowSensitiveUISourceUpdate = flag;
 	}
 	
-	public void addInternetSinkURL(Stmt sink, String url){
-		String sig = ToolSet.createStmtSignature(sink, null);
+	public void addInternetSinkURL(Stmt sink, String url, SootMethod sm){
+//		String sig = ToolSet.createStmtSignature(sink, null);
+		String sig = FlowPathSet.getStmtSignatureForDynamicCombination(sink, sm);
+		String[] urls = url.split(",");
+		System.out.println("DEBUG222:"+url);
+		for(String u : urls){
+			System.out.println("  :"+u);
+		}
+		
 		if(internetURLAddrMap.containsKey(sig))
 			internetURLAddrMap.get(sig).add(url.toLowerCase());
 		else{
@@ -107,10 +115,18 @@ public class GlobalData {
 			internetURLAddrMap.put(sig, tmp);
 		}
 	}
+	public void addUnsolvedUrlSinkOriginalStmt(Stmt sink, SootMethod sinkMethod, Stmt ori, SootMethod originMethod){
+		this.unsolvedURLSinkOriginalStmtMap.put(FlowPathSet.getStmtSignatureForDynamicCombination(sink, sinkMethod),
+				FlowPathSet.getStmtSignatureForDynamicCombination(ori, originMethod));
+	}
 	
-	public Set<String> getInternetSinkURL(Stmt sink){
-		String sig = ToolSet.createStmtSignature(sink, null);
+	public Set<String> getInternetSinkURL(Stmt sink, SootMethod sm){
+//		String sig = ToolSet.createStmtSignature(sink, null);
+		String sig = FlowPathSet.getStmtSignatureForDynamicCombination(sink, sm);
 		return internetURLAddrMap.get(sig);
+	}
+	public String getUnsolvedUrlSinkOriginalStmt(Stmt stmt, SootMethod sm){
+		return unsolvedURLSinkOriginalStmtMap.get(FlowPathSet.getStmtSignatureForDynamicCombination(stmt, sm));
 	}
 	//createStmtSignature
 //	public String createStmtSignature(Stmt stmt, IInfoflowCFG cfg){

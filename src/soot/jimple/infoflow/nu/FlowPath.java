@@ -57,6 +57,8 @@ public class FlowPath {
 	private CallGraph cg;
 	private Pattern callbackMethodNamePatttern = Pattern.compile("^on[A-Z][a-z]");
 	
+	//TODO: fix this
+	public SootMethod sinkMethod = null;
 	/*** Constructors ***/
 	public FlowPath(IInfoflowCFG icfg, ResultSourceInfo source, ResultSinkInfo sink,
 			Set<String> lifeCycleEventListenerSet,
@@ -68,6 +70,8 @@ public class FlowPath {
 		this.pathStmtMap = new HashMap<String, Stmt>();
 		this.source = source;
 		this.sink = sink;
+		if(icfg != null)
+			this.sinkMethod = icfg.getMethodOf(sink.getSink());
 		this.cg =  Scene.v().getCallGraph();
 		this.registryMap = registryMap;
 		this.lifeCycleEventListenerSet = lifeCycleEventListenerSet;
@@ -86,6 +90,8 @@ public class FlowPath {
 		this.pathStmtMap = new HashMap<String, Stmt>();
 		this.source = sourceFP.getSource();
 		this.sink = sinkFP.getSink();
+		if(icfg != null)
+			this.sinkMethod = icfg.getMethodOf(sink.getSink());
 		this.cg =  sourceFP.cg;
 		this.registryMap = sourceFP.registryMap;
 		this.lifeCycleEventListenerSet = sourceFP.lifeCycleEventListenerSet;
@@ -133,7 +139,7 @@ public class FlowPath {
 		sb.append("PathBegin:\n");
 		for(Stmt stmt : fullPath)
 			sb.append("  "+stmt.toString()+"@"+icfg.getMethodOf(stmt)+"\n");
-		sb.append("PathEnd:\n");
+		sb.append("PathEnd:");
 		return sb.toString();
 	}
 	@Override

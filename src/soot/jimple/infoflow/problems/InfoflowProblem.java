@@ -176,7 +176,7 @@ public class InfoflowProblem extends AbstractInfoflowProblem {
 								break;
 							}
 							if(ds.containsInvokeExpr() && ds.getInvokeExpr().getMethod().getName().equals("findViewById")){
-								findViewByIdSignature = fps.getStmtSignatureForDynamicCombination(ds);
+								findViewByIdSignature = FlowPathSet.getStmtSignatureForDynamicCombination(ds, fps.getCFG().getMethodOf(ds));
 							}
 						}
 					}
