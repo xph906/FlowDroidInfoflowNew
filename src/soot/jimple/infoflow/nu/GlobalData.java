@@ -53,6 +53,9 @@ public class GlobalData {
 	private final Map<String, String> unsolvedURLSinkOriginalStmtMap = 
 			new HashMap<String, String>();
 	
+	private final Map<String, Set<String>> cls2ImageNameMap =
+			new HashMap<String, Set<String>>();
+	
 	private boolean allowSensitiveUISourceUpdate = true;
 	
 	public void addUnsolvedViewStmtFlowIdMap(String signature, Integer flowId){
@@ -66,6 +69,18 @@ public class GlobalData {
 			set.add(texts.trim());
 			clsStringMap.put(clsName, set);
 		}
+	}
+	public void addImageNameToCls(String clsName, String imageName){
+		if(cls2ImageNameMap.containsKey(clsName))
+			cls2ImageNameMap.get(clsName).add(imageName.trim());
+		else{
+			Set<String> set = new HashSet<String>();
+			set.add(imageName.trim());
+			cls2ImageNameMap.put(clsName, set);
+		}
+	}
+	public Set<String> getClsImageNames(String clsName){
+		return cls2ImageNameMap.get(clsName);
 	}
 	public Map<String, Integer> getUnsolvedViewStmtFlowIdMap(){
 		return unsolvedViewStmtFlowIdMap;
@@ -102,10 +117,10 @@ public class GlobalData {
 //		String sig = ToolSet.createStmtSignature(sink, null);
 		String sig = FlowPathSet.getStmtSignatureForDynamicCombination(sink, sm);
 		String[] urls = url.split(",");
-		System.out.println("DEBUG222:"+url);
-		for(String u : urls){
-			System.out.println("  :"+u);
-		}
+//		System.out.println("DEBUG222:"+url);
+//		for(String u : urls){
+//			System.out.println("  :"+u);
+//		}
 		
 		if(internetURLAddrMap.containsKey(sig))
 			internetURLAddrMap.get(sig).add(url.toLowerCase());

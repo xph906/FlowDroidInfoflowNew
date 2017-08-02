@@ -72,9 +72,9 @@ public class FlowPathSet {
 	static final String BUNDLE_PUT_SIGNATURE_STR = "android.os.Bundle: void put";
 	static final String PREFERENCE_PUT_SIGNATURE_STR = "android.content.SharedPreferences$Editor put";
 	static final String FIND_VIEW_BY_ID_SIGNATURE_STR = "android.view.View findViewById(int)";
-	static final String INTENT_GET_PATTERN = "android\\.content\\.Intent\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	static final String INTENT_GET_PATTERN = "android\\.content\\.Intent\\: (.)+get([A-Z][a-zA-Z0-9]+)?\\(";
 	static final Pattern intentGetPattern = Pattern.compile(INTENT_GET_PATTERN);
-	static final String BUNDLE_GET_PATTERN = "android\\.os\\.Bundle\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
+	static final String BUNDLE_GET_PATTERN = "android\\.os\\.Bundle\\: (.)+get([A-Z][a-zA-Z0-9]+)?\\(";
 	static final Pattern bundleGetPattern = Pattern.compile(BUNDLE_GET_PATTERN);
 	static final String PREFERENCE_GET_PATTERN = "android\\.content\\.SharedPreferences\\: (.)+get[A-Z][a-zA-Z0-9]+\\(";
 	static final Pattern preferenceGetPattern = Pattern.compile(PREFERENCE_GET_PATTERN);
@@ -577,6 +577,19 @@ public class FlowPathSet {
 			NUDisplay.debug("Flow:"+fp.getSource()+" => "+fp.getSink(), null);
 		}
 	}
+	
+	public String getClassNameFromLayoutId(Integer id){
+		if(id == null) return null;
+		for(String clsName : activityLayoutMap.keySet()){
+			Set<Integer> ids = activityLayoutMap.get(clsName);
+			if(ids != null){
+				for(Integer cid : ids)
+					if(cid.equals(id))
+						return clsName;
+			}
+		}
+		return null;
+	}
 
 	/*** Getters ***/
 	public ISourceSinkManager getSourceSinkMgr() {
@@ -863,6 +876,8 @@ public class FlowPathSet {
 		
 		//CASE: source is Bundle get and sink is real sink
 		matcher = bundleGetPattern.matcher(fp.getSource().getSource().toString());
+		NUDisplay.debug("BundleGet->Sink:"+fp.getSource().getSource()+" --"+fp.getSink().getSink(),
+				"handleInterComponentHelper");
 		if(matcher.find()){
 			if(isRealSink(fp.getSink().getSink())){
 				Stmt source = fp.getSource().getSource();

@@ -222,8 +222,11 @@ public class FlowPath {
 				SootMethod sm = icfg.getMethodOf(stmt);
 				rs.add(sm.getDeclaringClass().getName());
 				Collection<Unit> callers = icfg.getCallersOf(sm);
-				for(Unit caller : callers)
+				for(Unit caller : callers){
 					queue.add((Stmt)caller);
+					
+//					System.out.println("CALLGRAPH:"+sm+" calledby "+icfg.getMethodOf((Stmt)caller));
+				}
 			}
 		}
 		return rs;
