@@ -172,6 +172,48 @@ public class ToolSet {
 		return false;
 	}
 
+	public static String findLastResTagAssignment(Stmt stmt, Value target, BiDiInterproceduralCFG<Unit, SootMethod> cfg, 
+			Set<Stmt> visited, String methodName) {
+		if(visited.contains(stmt)){
+			return null;
+		}
+		visited.add(stmt);
+		GlobalData gData = GlobalData.getInstance();
+		if(cfg == null) {
+			System.err.println("Error: findLastResTagAssignment cfg is not set.");
+			return null;
+		}
+		// If this is an assign statement, we need to check whether it changes
+		// the variable we're looking for
+		if (stmt instanceof AssignStmt) {
+			AssignStmt assign = (AssignStmt) stmt;
+			if (assign.getLeftOp() == target) {
+				System.out.println("  Debug: "+assign+" "+assign.getRightOp().getClass());
+				// ok, now find the new value from the right side
+				if (assign.getRightOp() instanceof IntConstant)
+					return  assign.getRightOp().toString();
+				else if (assign.getRightOp() instanceof StaticFieldRef) {
+					StaticFieldRef fr = (StaticFieldRef)assign.getRightOp();
+					return fr.getFieldRef().declaringClass().getName();
+				} 
+				else if(assign.getRightOp() instanceof Local){
+					target = assign.getRightOp();
+				}
+			}
+			
+		}
+
+		// Continue the search upwards
+		for (Unit pred : cfg.getPredsOf(stmt)) {
+			if (!(pred instanceof Stmt))
+				continue;
+			String lastAssignment = findLastResTagAssignment((Stmt) pred, target, cfg, visited, methodName);
+			if (lastAssignment != null)
+				return lastAssignment;
+		}
+		return null;
+	}
+	
 	public static Integer findLastResIDAssignment(Stmt stmt, Value target, BiDiInterproceduralCFG<Unit, SootMethod> cfg, 
 			Set<Stmt> visited, String methodName) {
 		if(visited.contains(stmt)){
@@ -188,7 +230,7 @@ public class ToolSet {
 		if (stmt instanceof AssignStmt) {
 			AssignStmt assign = (AssignStmt) stmt;
 			if (assign.getLeftOp() == target) {
-				System.out.println("  Debug: "+assign+" "+assign.getRightOp().getClass());
+				//System.out.println("  Debug: "+assign+" "+assign.getRightOp().getClass());
 				// ok, now find the new value from the right side
 				if (assign.getRightOp() instanceof IntConstant)
 					return ((IntConstant) assign.getRightOp()).value;
@@ -462,7 +504,7 @@ public class ToolSet {
 						target = assign.getRightOp();
 					}
 					else if (assign.getRightOp() instanceof InvokeExpr) {
-						NUDisplay.debug("  findLastResStringAssignment right invoke expr:"+assign, null);
+						//NUDisplay.debug("  findLastResStringAssignment right invoke expr:"+assign, null);
 						InvokeExpr ie = (InvokeExpr)assign.getRightOp();
 						if(ie.getArgCount()==0 && ie.getMethod().hasActiveBody()){
 							findStringHelperHandleNonParamMethod(ie, rs, cfg, visited);

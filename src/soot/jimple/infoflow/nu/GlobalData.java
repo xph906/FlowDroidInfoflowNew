@@ -45,6 +45,8 @@ public class GlobalData {
 			new HashMap<String, Set<String>>();
 	private final Map<String, Set<String>> clsStringMap = 
 			new HashMap<String, Set<String>>();
+	private Map<String, String> queryIDMap = 
+			new HashMap<String, String>();
 	
 	private final Map<String, Integer> unsolvedViewStmtFlowIdMap = 
 			new HashMap<String, Integer>();
@@ -55,6 +57,139 @@ public class GlobalData {
 	
 	private final Map<String, Set<String>> cls2ImageNameMap =
 			new HashMap<String, Set<String>>();
+	
+	
+	private Map<String, Pair<Integer, Integer>> cls2FindViewByIdCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2ContentViewCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2InflateCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2TextCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2TitleCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2MsgCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2PosBtnCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	private Map<String, Pair<Integer, Integer>> cls2NegBtnCnt =
+			new HashMap<String, Pair<Integer, Integer>>();
+	
+	public Pair<Integer, Integer> getFindViewByIdCntByCls(String cls){
+		return cls2FindViewByIdCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getContentViewByCls(String cls){
+		return cls2ContentViewCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getInflateByCls(String cls){
+		return cls2InflateCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getTextByCls(String cls){
+		return cls2TextCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getTitleByCls(String cls){
+		return cls2TitleCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getMsgByCls(String cls){
+		return cls2MsgCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getPosBtnByCls(String cls){
+		return cls2PosBtnCnt.get(cls);
+	}
+	public Pair<Integer, Integer> getNegBtnByCls(String cls){
+		return cls2NegBtnCnt.get(cls);
+	}
+	
+	public void addNegBtnCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2NegBtnCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2NegBtnCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2NegBtnCnt.put(cls, pair);
+		}
+	}
+	public void addPosBtnCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2PosBtnCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2PosBtnCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2PosBtnCnt.put(cls, pair);
+		}
+	}
+	
+	public void addMsgCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2MsgCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2MsgCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2MsgCnt.put(cls, pair);
+		}
+	}
+	public void addTitleCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2TitleCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2TitleCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2TitleCnt.put(cls, pair);
+		}
+	}
+	public void addTextCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2TextCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2TextCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2TextCnt.put(cls, pair);
+		}
+	}
+	public void addInflateCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2InflateCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2InflateCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2InflateCnt.put(cls, pair);
+		}
+	}
+	public void addFindViewByIdCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2FindViewByIdCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2FindViewByIdCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2FindViewByIdCnt.put(cls, pair);
+		}
+	}
+	public void addContentCnt(String cls, Integer solved, Integer unsolved){
+		if(cls2ContentViewCnt.containsKey(cls)){
+			Pair<Integer, Integer> pair = cls2ContentViewCnt.get(cls);
+			pair.first += solved;
+			pair.second += unsolved;
+		}
+		else{
+			Pair<Integer, Integer> pair = new Pair<Integer,Integer>(solved, unsolved);
+			cls2ContentViewCnt.put(cls, pair);
+		}
+	}
 	
 	private boolean allowSensitiveUISourceUpdate = true;
 	
@@ -276,11 +411,13 @@ public class GlobalData {
 	}
 	
 	public void addViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, Integer id){
+		
 		if(!stmt.containsInvokeExpr() || !stmt.getInvokeExpr().getMethod().getName().equals("findViewById")){
 			NUDisplay.error("addViewID: stmt doesn't contain findViewById: "+stmt, null);
 			return ;
 		}
 		SootMethod sm = icfg.getMethodOf(stmt);
+		String cls = sm.getDeclaringClass().getName();
 		if(!sm.hasActiveBody()){
 			NUDisplay.error("addViewID: stmt is not in active method: "+sm, null);
 			return ;
@@ -295,6 +432,27 @@ public class GlobalData {
 	    }
 	    String sig = StmtPosTag.createStmtPosSignature(cnt, sm);
 	    viewIDMap.put(sig, id);
+	}
+	public void addQueryURI(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg, String id){
+		if(!stmt.containsInvokeExpr() || !stmt.getInvokeExpr().getMethod().getName().equals("query")){
+			NUDisplay.error("addQueryID: stmt doesn't contain findViewById: "+stmt, null);
+			return ;
+		}
+		SootMethod sm = icfg.getMethodOf(stmt);
+		if(!sm.hasActiveBody()){
+			NUDisplay.error("addQueryID: stmt is not in active method: "+sm, null);
+			return ;
+		}
+		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+	    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
+	    int cnt = 0;
+	    for (Unit u : orderer.newList(g, false)) {
+	    	cnt++;
+	    	if(stmt.equals((Stmt)u))
+	    		break;
+	    }
+	    String sig = StmtPosTag.createStmtPosSignature(cnt, sm);
+	    queryIDMap.put(sig, id);
 	}
 	
 	public Integer getViewID(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg){
@@ -317,6 +475,28 @@ public class GlobalData {
 	    }
 	    String sig = StmtPosTag.createStmtPosSignature(cnt, sm);
 	    return viewIDMap.get(sig);
+	}
+	
+	public String getQueryURI(Stmt stmt, BiDiInterproceduralCFG<Unit, SootMethod> icfg){
+		if(!stmt.containsInvokeExpr() || !stmt.getInvokeExpr().getMethod().getName().equals("query")){
+			NUDisplay.error("Error query: stmt doesn't contain query: "+stmt, null);
+			return null;
+		}
+		SootMethod sm = icfg.getMethodOf(stmt);
+		if(!sm.hasActiveBody()){
+			NUDisplay.error("Error query: stmt is not in active method: "+sm, null);
+			return null;
+		}
+		UnitGraph g = new ExceptionalUnitGraph(sm.getActiveBody());
+	    Orderer<Unit> orderer = new PseudoTopologicalOrderer<Unit>();
+	    int cnt = 0;
+	    for (Unit u : orderer.newList(g, false)) {
+	    	cnt++;
+	    	if(stmt.equals((Stmt)u))
+	    		break;
+	    }
+	    String sig = StmtPosTag.createStmtPosSignature(cnt, sm);
+	    return queryIDMap.get(sig);
 	}
 	
 }

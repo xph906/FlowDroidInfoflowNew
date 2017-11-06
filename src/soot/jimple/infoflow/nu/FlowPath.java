@@ -125,8 +125,15 @@ public class FlowPath {
 	public String getTag(){
 		try{
 			SootMethod sourceMethod =  source.getSource().getInvokeExpr().getMethod();
+			String name = sourceMethod.getName(); 
+			if(sourceMethod.getName().equals("query")){
+				GlobalData gd = GlobalData.getInstance();
+				String tag = gd.getQueryURI(source.getSource(), icfg);
+				if(tag!=null)
+					name += "."+tag;
+			}
 			SootMethod sinkMethod = sink.getSink().getInvokeExpr().getMethod();
-			return sourceMethod.getName()+"@"+sourceMethod.getDeclaringClass().getName()+" => "+
+			return name+"@"+sourceMethod.getDeclaringClass().getName()+" => "+
 					sinkMethod.getName()+"@"+sinkMethod.getDeclaringClass().getName();
 		}
 		catch(Exception e){
